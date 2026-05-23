@@ -11,12 +11,30 @@ export interface ActionResult {
   data?: unknown
 }
 
+/**
+ * Extrait un message lisible d'une erreur Convex.
+ *
+ * Les ConvexError remontent avec la forme :
+ *   `[Request ID: xxx] Server Error\nUncaught Error: <vrai message>\n  at handler …`
+ *
+ * On garde juste la phrase utile, sans Request ID ni stack.
+ */
+function extractFriendlyMessage(error: unknown): string {
+  if (!(error instanceof Error) || !error.message) return "Erreur inconnue."
+  const m = error.message
+  // Pattern Convex : extrait ce qui suit "Uncaught Error: " ou "Uncaught ConvexError: " jusqu'à un saut de ligne ou " at "
+  const match = m.match(/Uncaught (?:Convex)?Error:\s*([^\n]+?)(?:\s+at\s|$)/)
+  if (match) return match[1].trim()
+  // Fallback : première ligne sans "[Request ID: …]"
+  return m
+    .split("\n")[0]
+    .replace(/^\[Request ID:[^\]]+\]\s*/, "")
+    .replace(/^Server Error\s*/, "")
+    .trim()
+}
+
 function fail(error: unknown): ActionResult {
-  const message =
-    error instanceof Error && error.message
-      ? error.message
-      : "Erreur inconnue."
-  return { ok: false, message }
+  return { ok: false, message: extractFriendlyMessage(error) }
 }
 
 /**
@@ -98,6 +116,28 @@ export async function transferRequestAction(
     revalidatePath(`/demandes/${ref}`)
     revalidatePath("/demandes")
     return { ok: true, message: "Dossier transféré." }
+  } catch (error) {
+    return fail(error)
+  }
+}
+
+/** Écrire au citoyen sur le fil de la demande. */
+export async function sendMessageToCitizenAction(
+  ref: string,
+  body: string,
+): Promise<ActionResult> {
+  const trimmed = body.trim()
+  if (!trimmed) return { ok: false, message: "Le message est vide." }
+
+  const token = await requireSessionToken()
+  try {
+    await convex.mutation(api.admin.mutations.sendMessageToCitizen, {
+      token,
+      ref,
+      body: trimmed,
+    })
+    revalidatePath(`/demandes/${ref}`)
+    return { ok: true, message: "Message envoyé." }
   } catch (error) {
     return fail(error)
   }

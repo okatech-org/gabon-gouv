@@ -2,14 +2,43 @@
  * Tests des mutations métier admin + vérification que les agrégats Convex
  * (ADR-0007) sont mis à jour automatiquement par les triggers.
  */
-import { convexTest } from "convex-test"
+import { register as registerAggregate } from "@convex-dev/aggregate/test"
+import { convexTest, type TestConvex } from "convex-test"
+import type { GenericSchema, SchemaDefinition } from "convex/server"
 import { beforeEach, describe, expect, test } from "vitest"
 import { api } from "../_generated/api"
 import type { Id } from "../_generated/dataModel"
 import schema from "../schema"
-import { registerAggregates } from "../lib/test-helpers"
 import { triggers } from "../lib/triggers"
 import { modules } from "../test.setup"
+
+/**
+ * Inline aggregate registration — le helper ne peut pas vivre dans `convex/`
+ * parce que `@convex-dev/aggregate/test` utilise `import.meta.glob`, non
+ * supporté par le runtime Convex. Externaliser dans `src/` est une option
+ * future ; pour l'instant on accepte la duplication (un seul fichier consomme).
+ */
+const AGGREGATE_NAMES = [
+  "aggCitizensGlobal",
+  "aggRequestsGlobal",
+  "aggDocumentsGlobal",
+  "aggArchivesGlobal",
+  "aggRequestsByOrg",
+  "aggDocumentsByOrg",
+  "aggRequestsByOrgStatus",
+  "aggArchivesByOrgStatus",
+  "aggRequestsByOrgAgent",
+  "aggRequestsByService",
+  "aggRequestsByServiceVariant",
+  "aggOrgsByStatus",
+  "aggNotifsUnread",
+] as const
+
+function registerAggregates(
+  t: TestConvex<SchemaDefinition<GenericSchema, boolean>>,
+): void {
+  for (const name of AGGREGATE_NAMES) registerAggregate(t, name)
+}
 
 interface Fixture {
   t: ReturnType<typeof convexTest>
@@ -471,6 +500,124 @@ describe("verseToSAE", () => {
     })
     expect(r2.already).toBe(true)
     expect(r2.archiveId).toBe(r1.archiveId)
+  })
+})
+
+// ====================================================================
+// sendMessageToCitizen
+// ====================================================================
+
+describe("sendMessageToCitizen", () => {
+  test("ajoute un message agent + un event dans le timeline", async () => {
+    const f = await buildFixture()
+    await f.t.mutation(api.admin.mutations.sendMessageToCitizen, {
+      token: f.yolandeToken,
+      ref: f.ref,
+      body: "Bonjour Marie, votre acte sera prêt sous 24h.",
+    })
+
+    const messages = await f.t.run((ctx) =>
+      ctx.db
+        .query("requestMessages")
+        .withIndex("by_request_time", (q) => q.eq("requestId", f.requestId))
+        .collect(),
+    )
+    expect(messages).toHaveLength(1)
+    expect(messages[0].fromKind).toBe("agent")
+    expect(messages[0].fromAgentId).toBe(f.yolandeId)
+    expect(messages[0].body).toContain("Marie")
+
+    const events = await f.t.run((ctx) =>
+      ctx.db
+        .query("requestEvents")
+        .withIndex("by_request_time", (q) => q.eq("requestId", f.requestId))
+        .collect(),
+    )
+    expect(events.some((e) => e.kind === "message")).toBe(true)
+  })
+
+  test("rejette un message vide", async () => {
+    const f = await buildFixture()
+    await expect(
+      f.t.mutation(api.admin.mutations.sendMessageToCitizen, {
+        token: f.yolandeToken,
+        ref: f.ref,
+        body: "   ",
+      }),
+    ).rejects.toThrowError(/ne peut pas être vide/)
+  })
+
+  test("rejette si la demande est dans un autre organisme", async () => {
+    const f = await buildFixture()
+    // Crée une demande dans l'autre organisme
+    const otherRef = "GC-OTHER-001"
+    await f.t.run(async (rawCtx) => {
+      const ctx = { ...rawCtx, db: triggers.wrapDB(rawCtx).db }
+      await ctx.db.insert("requests", {
+        ref: otherRef,
+        citizenId: f.citizenId,
+        serviceId: f.serviceId,
+        organismId: f.otherOrgId,
+        status: "in_instruction",
+        progressPct: 30,
+        depositedAt: Date.now(),
+      })
+    })
+    await expect(
+      f.t.mutation(api.admin.mutations.sendMessageToCitizen, {
+        token: f.yolandeToken,
+        ref: otherRef,
+        body: "test",
+      }),
+    ).rejects.toThrowError(/hors de votre organisme/)
+  })
+})
+
+// ====================================================================
+// transferRequest
+// ====================================================================
+
+describe("transferRequest", () => {
+  test("change l'organisme et désassigne l'agent", async () => {
+    const f = await buildFixture()
+    await f.t.mutation(api.admin.mutations.transferRequest, {
+      token: f.yolandeToken,
+      ref: f.ref,
+      toOrgId: f.otherOrgId,
+    })
+    const req = await f.t.run((ctx) => ctx.db.get(f.requestId))
+    expect(req?.organismId).toBe(f.otherOrgId)
+    expect(req?.assignedAgentId).toBeUndefined()
+
+    const events = await f.t.run((ctx) =>
+      ctx.db
+        .query("requestEvents")
+        .withIndex("by_request_time", (q) => q.eq("requestId", f.requestId))
+        .collect(),
+    )
+    expect(events.some((e) => e.kind === "transfer")).toBe(true)
+  })
+
+  test("met à jour aggRequestsByOrg pour les deux organismes", async () => {
+    const f = await buildFixture()
+    const countOrg1Before = await f.t.query(
+      api.admin.dashboard.getSidebarCounts,
+      { token: f.yolandeToken },
+    )
+    // Yolande voit 1 demande assignée avant le transfert
+    expect(countOrg1Before.assignedToMe).toBe(1)
+
+    await f.t.mutation(api.admin.mutations.transferRequest, {
+      token: f.yolandeToken,
+      ref: f.ref,
+      toOrgId: f.otherOrgId,
+    })
+
+    const countOrg1After = await f.t.query(
+      api.admin.dashboard.getSidebarCounts,
+      { token: f.yolandeToken },
+    )
+    expect(countOrg1After.assignedToMe).toBe(0)
   })
 })
 

@@ -587,6 +587,40 @@ export const verseToSAE = mutation({
   },
 })
 
+/* ---------- Écrire au citoyen sur une demande (C5 ↔ A3 thread) ---------- */
+export const sendMessageToCitizen = mutation({
+  args: { token: v.string(), ref: v.string(), body: v.string() },
+  handler: async (ctx, { token, ref, body }) => {
+    const me = await requireAgent(ctx, token)
+    const trimmed = body.trim()
+    if (!trimmed) throw new Error("Le message ne peut pas être vide.")
+
+    const request = await getRequestByRef(ctx, ref)
+    if (!request) throw new Error("Demande introuvable.")
+    if (request.organismId !== me.organismId) {
+      throw new Error("Demande hors de votre organisme.")
+    }
+
+    const now = Date.now()
+    await ctx.db.insert("requestMessages", {
+      requestId: request._id,
+      fromKind: "agent",
+      fromAgentId: me._id,
+      body: trimmed,
+      sentAt: now,
+    })
+    await ctx.db.insert("requestEvents", {
+      requestId: request._id,
+      kind: "message",
+      title: "Message envoyé au citoyen",
+      description: trimmed.length > 80 ? trimmed.slice(0, 77) + "…" : trimmed,
+      actor: me.name,
+      actorAgentId: me._id,
+      occurredAt: now,
+    })
+  },
+})
+
 /* ---------- Helpers ---------- */
 async function getRequestByRef(ctx: MutationCtx, ref: string) {
   return ctx.db

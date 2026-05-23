@@ -22,8 +22,10 @@ import {
   statusBadge,
 } from "@/lib/format"
 import { InternalNoteEditor } from "./internal-note-editor"
+import { MessageCitizenButton } from "./message-citizen-button"
 import { RequestPieceButton } from "./request-piece-button"
 import { SignAndIssueButton } from "./sign-button"
+import { TransferButton } from "./transfer-button"
 
 interface InstructionPiece {
   label: string
@@ -123,10 +125,13 @@ export default async function AdminInstructionPage({
   if (!session) redirect("/login")
 
   const { ref } = await params
-  const instruction = (await convex.query(api.admin.requests.getInstruction, {
-    token: session.token,
-    ref,
-  })) as InstructionData | null
+  const [instruction, organisms] = await Promise.all([
+    convex.query(api.admin.requests.getInstruction, {
+      token: session.token,
+      ref,
+    }) as Promise<InstructionData | null>,
+    convex.query(api.admin.directory.listForPicker, { token: session.token }),
+  ])
 
   if (!instruction) notFound()
 
@@ -182,12 +187,14 @@ export default async function AdminInstructionPage({
         }
         actions={
           <>
-            <Button variant="ghost" icon="messageSquare">
-              Écrire au citoyen
-            </Button>
-            <Button variant="secondary" icon="share">
-              Transférer
-            </Button>
+            <MessageCitizenButton
+              requestRef={instruction.ref}
+              citizenName={citizen?.name}
+            />
+            <TransferButton
+              requestRef={instruction.ref}
+              organisms={organisms}
+            />
             <SignAndIssueButton
               requestRef={instruction.ref}
               disabled={instruction.status === "issued"}

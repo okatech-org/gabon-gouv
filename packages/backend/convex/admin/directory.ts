@@ -26,6 +26,7 @@ export const list = query({
             .collect()
           const referent = agents.find((a) => a.role === "admin_organisme") ?? agents[0]
           return {
+            _id: o._id,
             name: o.name,
             shortName: o.shortName,
             category: o.category,
@@ -37,5 +38,24 @@ export const list = query({
           }
         }),
     )
+  },
+})
+
+/* ---------- Liste minimale pour pickers (transfert, correspondance) ---------- */
+export const listForPicker = query({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    const me = await requireAgent(ctx, token)
+    const organisms = await ctx.db
+      .query("organisms")
+      .withIndex("by_status", (q) => q.eq("status", "active"))
+      .collect()
+    return organisms
+      .filter((o) => o._id !== me.organismId)
+      .map((o) => ({
+        _id: o._id,
+        label: o.shortName ?? o.name,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label))
   },
 })
