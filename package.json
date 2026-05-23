@@ -9,6 +9,8 @@
     "lint": "turbo lint",
     "format": "turbo format",
     "typecheck": "turbo typecheck",
+    "test": "turbo test",
+    "test:once": "turbo test:once",
     "dev:citizen": "turbo dev --filter=citizen-web",
     "dev:admin": "turbo dev --filter=admin-web",
     "dev:platform": "turbo dev --filter=platform-web",

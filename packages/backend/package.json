@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "convex dev",
     "deploy": "convex deploy",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest",
+    "test:once": "vitest run",
+    "test:coverage": "vitest run --coverage --coverage.reporter=text"
   },
   "dependencies": {
     "@convex-dev/aggregate": "^0.2.1",
@@ -14,8 +17,11 @@
     "convex-helpers": "^0.1.69"
   },
   "devDependencies": {
+    "@edge-runtime/vm": "^5.0.0",
     "@workspace/tsconfig": "workspace:*",
-    "typescript": "5.9.3"
+    "convex-test": "^0.0.53",
+    "typescript": "5.9.3",
+    "vitest": "^4.1.7"
   },
   "exports": {
     ".": "./src/index.ts",
