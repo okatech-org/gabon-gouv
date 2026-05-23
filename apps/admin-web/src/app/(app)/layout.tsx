@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation"
 import type { ReactNode } from "react"
 import { AppHeader, Sidebar } from "@workspace/ui"
-import { ADMIN_NAV } from "@/lib/admin-nav"
+import { api } from "@workspace/backend/generated"
+import { buildAdminNav } from "@/lib/admin-nav"
+import { convex } from "@/lib/convex"
 import { getCurrentAgent } from "@/lib/current-agent"
 import { agentRoleLabel } from "@/lib/format"
 
@@ -15,6 +17,17 @@ import { agentRoleLabel } from "@/lib/format"
 export default async function AppShellLayout({ children }: { children: ReactNode }) {
   const session = await getCurrentAgent()
   if (!session) redirect("/login")
+
+  // Compteurs vivants depuis les agrégats Convex (ADR-0007) — file de
+  // demandes en attente + correspondances non lues pour l'agent connecté.
+  const sidebarCounts = await convex
+    .query(api.admin.dashboard.getSidebarCounts, { token: session.token })
+    .catch(() => ({ queue: 0, correspondenceUnread: 0 }))
+
+  const nav = buildAdminNav({
+    queue: sidebarCounts.queue,
+    correspondenceUnread: sidebarCounts.correspondenceUnread,
+  })
 
   return (
     <div
@@ -31,7 +44,7 @@ export default async function AppShellLayout({ children }: { children: ReactNode
         role={agentRoleLabel(session.agent.role)}
       />
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
-        <Sidebar items={ADMIN_NAV} />
+        <Sidebar items={nav} />
         <main
           style={{
             flex: 1,

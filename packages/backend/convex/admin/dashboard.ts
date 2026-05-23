@@ -102,17 +102,19 @@ export const getSidebarCounts = query({
     const agent = await requireAgent(ctx, token)
     const orgId = agent.organismId
 
-    const [queue, assignedToMe, lateOverdue] = await Promise.all([
-      aggRequestsByOrgStatus.count(ctx, {
-        namespace: aggKeys.orgStatus(orgId, "submitted"),
-      }),
-      aggRequestsByOrgAgent.count(ctx, {
-        namespace: aggKeys.orgAgent(orgId, agent._id),
-      }),
-      countLate(ctx, orgId),
-    ])
+    const [queue, assignedToMe, lateOverdue, correspondenceUnread] =
+      await Promise.all([
+        aggRequestsByOrgStatus.count(ctx, {
+          namespace: aggKeys.orgStatus(orgId, "submitted"),
+        }),
+        aggRequestsByOrgAgent.count(ctx, {
+          namespace: aggKeys.orgAgent(orgId, agent._id),
+        }),
+        countLate(ctx, orgId),
+        countCorrespondenceUnread(ctx, orgId, agent._id),
+      ])
 
-    return { queue, assignedToMe, lateOverdue }
+    return { queue, assignedToMe, lateOverdue, correspondenceUnread }
   },
 })
 
@@ -135,6 +137,25 @@ async function countLate(
       r.status !== "rejected" &&
       r.status !== "cancelled",
   ).length
+}
+
+async function countCorrespondenceUnread(
+  ctx: QueryCtx,
+  orgId: Id<"organisms">,
+  agentId: Id<"agents">,
+): Promise<number> {
+  const incoming = await ctx.db
+    .query("correspondences")
+    .withIndex("by_to_organism", (q) => q.eq("toOrganismId", orgId))
+    .collect()
+  // Une correspondance est "non lue" pour cet agent s'il n'a pas de
+  // `correspondenceReads` row associé.
+  const reads = await ctx.db
+    .query("correspondenceReads")
+    .withIndex("by_agent", (q) => q.eq("agentId", agentId))
+    .collect()
+  const readIds = new Set(reads.map((r) => r.correspondenceId))
+  return incoming.filter((c) => !readIds.has(c._id)).length
 }
 
 function formatServiceTitle(service: { title: string; variant?: string }) {
