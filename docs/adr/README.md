@@ -33,6 +33,7 @@ Files are named `NNNN-kebab-case-title.md` where `NNNN` is a zero-padded sequenc
 | 0010 | [Citizen↔agent messages separated from inter-admin correspondence](0010-messages-vs-correspondence.md) | Accepted |
 | 0011 | [Lazy creation of registry entries](0011-lazy-registry-entries.md)               | Accepted |
 | 0012 | [Audit log separated from team activity feed](0012-audit-log-separation.md)      | Accepted |
+| 0013 | [Testing strategy — Vitest, convex-test, RTL](0013-testing-strategy.md)           | Accepted |
 
 ## Writing a new ADR
 
