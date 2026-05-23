@@ -18,29 +18,27 @@ import {
   Tr,
   type IconName,
 } from "@workspace/ui"
-import {
-  getPlatformActivity,
-  getPlatformHealth,
-  getPlatformKpis,
-  getPlatformOrgVolumes,
-  getPlatformVolume,
-} from "@workspace/mocks/platform"
+import { api } from "@workspace/backend/generated"
+import { convex } from "@/lib/convex"
+import { requirePlatformUser } from "@/lib/current-platform-user"
 
 export default async function PlatformSupervisionPage() {
-  const [kpis, volume, health, orgVolumes, activity] = await Promise.all([
-    getPlatformKpis(),
-    getPlatformVolume(),
-    getPlatformHealth(),
-    getPlatformOrgVolumes(),
-    getPlatformActivity(),
-  ])
+  const { token } = await requirePlatformUser()
+  const data = await convex.query(api.platform.supervision.getSupervision, { token })
+  const { kpis, volume, health, orgVolumes, activity } = data
+
+  const activeKpi = kpis.find((k) => k.label === "Organismes actifs")
+  const onboardingKpi = kpis.find((k) => k.label === "En onboarding")
+  const requests7dKpi = kpis.find((k) => k.label === "Demandes 7 j")
+
+  const subtitle = `${activeKpi?.value ?? "—"} administrations actives · ${onboardingKpi?.value ?? "—"} en onboarding · ${requests7dKpi?.value ?? "—"} demandes sur 7 jours`
 
   return (
     <>
       <PageHeader
         breadcrumbs={["Supervision"]}
         title="Vue plateforme · temps réel"
-        subtitle="47 organismes connectés · 128 services publiés · 312 480 demandes traitées en 2025"
+        subtitle={subtitle}
         meta={
           <>
             <Badge tone="archived" dot icon="checkCircle">
@@ -83,8 +81,6 @@ export default async function PlatformSupervisionPage() {
               value={k.value}
               icon={k.icon as IconName}
               hint={k.hint}
-              delta={k.delta}
-              deltaTone={k.deltaTone}
               accent={k.accent}
             />
           ))}
@@ -119,10 +115,10 @@ export default async function PlatformSupervisionPage() {
                 fontVariantNumeric: "tabular-nums",
               }}
             >
-              <span>21 avr.</span>
-              <span>1 mai</span>
-              <span>10 mai</span>
-              <span>20 mai</span>
+              <span>il y a 30 j</span>
+              <span>il y a 20 j</span>
+              <span>il y a 10 j</span>
+              <span>aujourd&apos;hui</span>
             </div>
           </Card>
           <Card>
@@ -130,8 +126,8 @@ export default async function PlatformSupervisionPage() {
               title="Santé des composants"
               level={3}
               action={
-                <Badge tone="archived" dot>
-                  Tous OK
+                <Badge tone={health.every((h) => h.status === "ok") ? "archived" : "warning"} dot>
+                  {health.every((h) => h.status === "ok") ? "Tous OK" : "Vigilance"}
                 </Badge>
               }
             />
@@ -152,15 +148,22 @@ export default async function PlatformSupervisionPage() {
                     height: 8,
                     borderRadius: "50%",
                     background:
-                      c.status === "ok" ? "var(--success-500)" : "var(--warning-500)",
+                      c.status === "ok"
+                        ? "var(--success-500)"
+                        : c.status === "warning"
+                          ? "var(--warning-500)"
+                          : "var(--danger-500)",
                   }}
                 />
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13.5, fontWeight: 600 }}>{c.title}</div>
                   <div style={{ fontSize: 12, color: "var(--ink-600)" }}>{c.description}</div>
                 </div>
-                <Badge tone={c.status === "ok" ? "archived" : "warning"} size="sm">
-                  {c.status === "ok" ? "OK" : "Dégradé"}
+                <Badge
+                  tone={c.status === "ok" ? "archived" : c.status === "warning" ? "warning" : "danger"}
+                  size="sm"
+                >
+                  {c.status === "ok" ? "OK" : c.status === "warning" ? "Dégradé" : "KO"}
                 </Badge>
               </div>
             ))}
@@ -171,7 +174,7 @@ export default async function PlatformSupervisionPage() {
         <Card>
           <SectionHeading
             title="Activité par organisme"
-            subtitle="Top 8 organismes par volume de demandes traitées sur 7 jours."
+            subtitle="Top 8 organismes par volume de demandes traitées sur 30 jours."
             level={3}
             action={
               <Link
@@ -179,7 +182,7 @@ export default async function PlatformSupervisionPage() {
                 style={{ textDecoration: "none", display: "inline-flex" }}
               >
                 <Button variant="ghost" iconRight="arrowRight" size="sm">
-                  Voir les 47 →
+                  Voir tout →
                 </Button>
               </Link>
             }
@@ -188,7 +191,7 @@ export default async function PlatformSupervisionPage() {
             <thead>
               <tr>
                 <Th>Organisme</Th>
-                <Th sortable>Demandes 7 j</Th>
+                <Th sortable>Demandes 30 j</Th>
                 <Th>Services actifs</Th>
                 <Th>Délai moy.</Th>
                 <Th>Satisfaction</Th>
@@ -225,7 +228,7 @@ export default async function PlatformSupervisionPage() {
                           marginRight: 4,
                         }}
                       />
-                      {r.satisfaction}/5
+                      {r.satisfaction}{r.satisfaction !== "—" ? "/5" : ""}
                     </span>
                   </Td>
                   <Td style={{ minWidth: 160 }}>
@@ -265,10 +268,13 @@ export default async function PlatformSupervisionPage() {
             <div style={{ height: 8 }} />
             <Alert
               tone="info"
-              title="3 nouvelles administrations en cours d'onboarding"
+              title={`${onboardingKpi?.value ?? "0"} administrations en cours d'onboarding`}
             >
-              ARSEE (Énergie), Conseil constitutionnel, DG Tourisme. Étape : signature de la
-              convention.
+              Suivez l&apos;avancement dans la console{" "}
+              <Link href="/onboarding" style={{ fontWeight: 600 }}>
+                Onboarding
+              </Link>
+              .
             </Alert>
             <div style={{ height: 8 }} />
             <Alert tone="warning" title="CDN Mvengue · latence p95 élevée">
@@ -278,6 +284,11 @@ export default async function PlatformSupervisionPage() {
           </Card>
           <Card>
             <SectionHeading title="Activité plateforme" level={3} />
+            {activity.length === 0 && (
+              <div style={{ fontSize: 13, color: "var(--ink-500)", padding: 12 }}>
+                Aucune activité enregistrée pour l&apos;instant.
+              </div>
+            )}
             {activity.map((a, i) => (
               <div
                 key={`${a.who}-${i}`}
@@ -308,9 +319,7 @@ export default async function PlatformSupervisionPage() {
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13 }}>
                     <b>{a.who}</b> {a.action}{" "}
-                    <a href="#" style={{ fontWeight: 600 }}>
-                      {a.what}
-                    </a>
+                    <span style={{ fontWeight: 600 }}>{a.what}</span>
                   </div>
                 </div>
                 <span style={{ fontSize: 11.5, color: "var(--ink-500)" }}>{a.when}</span>

@@ -12,19 +12,36 @@ import {
   Th,
   Tr,
 } from "@workspace/ui"
-import {
-  getOnboardingReferents,
-  getOnboardingSteps,
-  getOnboardingTargetOrg,
-} from "@workspace/mocks/platform"
+import { api } from "@workspace/backend/generated"
+import { convex } from "@/lib/convex"
+import { requirePlatformUser } from "@/lib/current-platform-user"
+import { longDate } from "@/lib/format"
+import { ValidateStepButton } from "./validate-step-button"
+import { StartSignatureButton } from "./start-signature-button"
+import { AddReferentButton } from "./add-referent-button"
 
 export default async function PlatformOnboardingPage() {
-  const [steps, referents, target] = await Promise.all([
-    getOnboardingSteps(),
-    getOnboardingReferents(),
-    getOnboardingTargetOrg(),
-  ])
+  const { token } = await requirePlatformUser()
+  const data = await convex.query(api.platform.onboarding.getOnboardingDashboard, { token })
 
+  if (!data) {
+    return (
+      <>
+        <PageHeader breadcrumbs={["Onboarding"]} title="Aucun onboarding en cours" />
+        <div style={{ padding: "20px 32px", maxWidth: 800 }}>
+          <Card>
+            <div style={{ padding: 16, color: "var(--ink-600)", fontSize: 14 }}>
+              Aucun processus d&apos;onboarding actif pour l&apos;instant. Démarrez-en un
+              depuis la page « Organisations » en cliquant sur{" "}
+              <b>Enregistrer une administration</b>.
+            </div>
+          </Card>
+        </div>
+      </>
+    )
+  }
+
+  const target = data.targetOrg
   const fiche: Array<[string, string]> = [
     ["Dénomination", target.denomination],
     ["Forme juridique", target.legalForm],
@@ -36,24 +53,22 @@ export default async function PlatformOnboardingPage() {
     ["Téléphone officiel", target.phone],
   ]
 
-  const signataires: Array<{ who: string; status: string; tone: "archived" | "warning" }> = [
-    { who: "Y. MAGANGA · Gabon Connect", status: "Signé · 18/05/2026", tone: "archived" },
-    { who: "T. NTOUTOUME · DG ARSEE", status: "En attente de signature", tone: "warning" },
-  ]
+  const activeStep = data.steps.find((s) => s.status === "active")
 
   return (
     <>
       <PageHeader
-        breadcrumbs={["Onboarding", "ARSEE — Régulation Énergie"]}
-        title="Onboarding · ARSEE"
-        subtitle="Autorité de Régulation du Secteur de l'Eau potable et de l'Énergie électrique"
+        breadcrumbs={["Onboarding", target.denomination]}
+        title={`Onboarding · ${target.acronym !== "—" ? target.acronym : target.denomination}`}
+        subtitle={target.denomination}
         meta={
           <>
             <Badge tone="warning" dot>
-              Étape 4 / 7 · Convention
+              Étape {data.currentStepIndex} / {data.totalSteps} ·{" "}
+              {data.currentStepLabel}
             </Badge>
             <span style={{ fontSize: 12, color: "var(--ink-600)" }}>
-              Initié le 02 mai 2026 par <b>Y. MAGANGA</b>
+              Initié le {longDate(data.initiatedAt)} par <b>{data.initiatedBy}</b>
             </span>
           </>
         }
@@ -65,7 +80,13 @@ export default async function PlatformOnboardingPage() {
             <Button variant="secondary" icon="save">
               Sauvegarder
             </Button>
-            <Button icon="check">Valider l&apos;étape</Button>
+            {activeStep ? (
+              <ValidateStepButton stepId={activeStep.id} stepLabel={activeStep.title} />
+            ) : (
+              <Badge tone="archived" dot>
+                Process terminé
+              </Badge>
+            )}
           </>
         }
       />
@@ -96,8 +117,8 @@ export default async function PlatformOnboardingPage() {
             </div>
           </div>
           <div style={{ padding: 14 }}>
-            {steps.map((s, i, arr) => (
-              <div key={s.title} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+            {data.steps.map((s, i, arr) => (
+              <div key={s.id} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
                 <div
                   style={{
                     display: "flex",
@@ -199,137 +220,127 @@ export default async function PlatformOnboardingPage() {
           <Card>
             <SectionHeading
               title="Référents désignés"
-              subtitle="3 référents avec habilitations."
+              subtitle={`${data.referents.length} référent${data.referents.length > 1 ? "s" : ""} avec habilitations.`}
               level={3}
-              action={
-                <Button variant="ghost" icon="plus" size="sm">
-                  Ajouter
-                </Button>
-              }
+              action={<AddReferentButton processId={data.processId} />}
             />
-            <Table>
-              <thead>
-                <tr>
-                  <Th>Nom</Th>
-                  <Th>Fonction</Th>
-                  <Th>E-mail</Th>
-                  <Th>Rôle Gabon Connect</Th>
-                  <Th>Authentification</Th>
-                  <Th>{" "}</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {referents.map((p) => (
-                  <Tr key={p.email}>
-                    <Td>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <Avatar name={p.name} tone="primary" size={24} />
-                        <span style={{ fontWeight: 600 }}>{p.name}</span>
-                      </div>
-                    </Td>
-                    <Td>{p.function}</Td>
-                    <Td style={{ color: "var(--ink-600)" }}>{p.email}</Td>
-                    <Td>
-                      <Badge tone="primary" size="sm">
-                        {p.role}
-                      </Badge>
-                    </Td>
-                    <Td>{p.auth}</Td>
-                    <Td>
-                      <Icon name="moreH" size={16} style={{ color: "var(--ink-400)" }} />
-                    </Td>
-                  </Tr>
-                ))}
-              </tbody>
-            </Table>
+            {data.referents.length === 0 ? (
+              <div style={{ padding: 16, fontSize: 13, color: "var(--ink-500)" }}>
+                Aucun référent désigné pour l&apos;instant.
+              </div>
+            ) : (
+              <Table>
+                <thead>
+                  <tr>
+                    <Th>Nom</Th>
+                    <Th>Fonction</Th>
+                    <Th>E-mail</Th>
+                    <Th>Rôle Gabon Connect</Th>
+                    <Th>Authentification</Th>
+                    <Th>{" "}</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.referents.map((p) => (
+                    <Tr key={p.id}>
+                      <Td>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <Avatar name={p.name} tone="primary" size={24} />
+                          <span style={{ fontWeight: 600 }}>{p.name}</span>
+                        </div>
+                      </Td>
+                      <Td>{p.function}</Td>
+                      <Td style={{ color: "var(--ink-600)" }}>{p.email}</Td>
+                      <Td>
+                        <Badge tone="primary" size="sm">
+                          {p.role}
+                        </Badge>
+                      </Td>
+                      <Td>{p.auth}</Td>
+                      <Td>
+                        <Icon name="moreH" size={16} style={{ color: "var(--ink-400)" }} />
+                      </Td>
+                    </Tr>
+                  ))}
+                </tbody>
+              </Table>
+            )}
           </Card>
 
           {/* Convention */}
-          <Card>
-            <SectionHeading
-              title="Signature de la convention"
-              subtitle="Étape en cours — convention type pour les autorités administratives indépendantes."
-              level={3}
-            />
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20 }}>
-              <div>
-                <div
-                  style={{
-                    border: "1px solid var(--ink-200)",
-                    borderRadius: 8,
-                    padding: 20,
-                    background: "var(--ink-50)",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <span
-                      style={{
-                        width: 44,
-                        height: 44,
-                        borderRadius: 6,
-                        background: "var(--primary-500)",
-                        color: "white",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <Icon name="fileText" size={20} />
-                    </span>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 14.5, fontWeight: 700 }}>
-                        Convention d&apos;adhésion Gabon Connect · ARSEE
+          {data.convention && (
+            <Card>
+              <SectionHeading
+                title="Signature de la convention"
+                subtitle="Étape en cours — convention type pour la catégorie d'organisme."
+                level={3}
+              />
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20 }}>
+                <div>
+                  <div
+                    style={{
+                      border: "1px solid var(--ink-200)",
+                      borderRadius: 8,
+                      padding: 20,
+                      background: "var(--ink-50)",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <span
+                        style={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: 6,
+                          background: "var(--primary-500)",
+                          color: "white",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Icon name="fileText" size={20} />
+                      </span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 14.5, fontWeight: 700 }}>
+                          {data.convention.title}
+                        </div>
+                        <div style={{ fontSize: 12.5, color: "var(--ink-600)" }}>
+                          {data.convention.version} ·{" "}
+                          {data.convention.articleChecklist.length} articles · générée le{" "}
+                          {longDate(data.convention.generatedAt)}
+                        </div>
                       </div>
-                      <div style={{ fontSize: 12.5, color: "var(--ink-600)" }}>
-                        v 2.4 · 14 articles · 18 pages · générée le 18/05/2026
-                      </div>
+                      <Button variant="secondary" size="sm" icon="eye">
+                        Lire
+                      </Button>
                     </div>
-                    <Button variant="secondary" size="sm" icon="eye">
-                      Lire
-                    </Button>
+                  </div>
+                  <div style={{ marginTop: 12 }}>
+                    {data.convention.articleChecklist.map((a) => (
+                      <div key={a.articleNumber}>
+                        <Checkbox
+                          checked={a.accepted}
+                          label={`Article ${a.articleNumber} — ${a.label}${a.accepted ? " validés" : " (en attente)"}`}
+                          id={`art-${a.articleNumber}`}
+                        />
+                        <div style={{ height: 6 }} />
+                      </div>
+                    ))}
                   </div>
                 </div>
-                <div style={{ marginTop: 12 }}>
-                  <Checkbox
-                    checked={true}
-                    label="Article 1 — Objet et périmètre validés"
-                    id="a1"
-                  />
-                  <div style={{ height: 6 }} />
-                  <Checkbox
-                    checked={true}
-                    label="Article 4 — Engagements de service (SLA, support, sécurité)"
-                    id="a4"
-                  />
-                  <div style={{ height: 6 }} />
-                  <Checkbox
-                    checked={true}
-                    label="Article 7 — Protection des données personnelles (loi 001/2011)"
-                    id="a7"
-                  />
-                  <div style={{ height: 6 }} />
-                  <Checkbox
-                    checked={false}
-                    label="Article 11 — Tarification & facturation (en attente de validation DGB)"
-                    id="a11"
-                  />
-                </div>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <div
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: "var(--ink-500)",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.06em",
-                  }}
-                >
-                  Signataires
-                </div>
-                {signataires.map((s) => (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                   <div
-                    key={s.who}
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: "var(--ink-500)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.06em",
+                    }}
+                  >
+                    Statut convention
+                  </div>
+                  <div
                     style={{
                       display: "flex",
                       alignItems: "center",
@@ -339,25 +350,51 @@ export default async function PlatformOnboardingPage() {
                       borderRadius: 6,
                     }}
                   >
-                    <Icon
-                      name="fingerprint"
-                      size={16}
-                      style={{ color: "var(--ink-500)" }}
-                    />
+                    <Icon name="fingerprint" size={16} style={{ color: "var(--ink-500)" }} />
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>{s.who}</div>
-                      <Badge tone={s.tone} size="sm" dot>
-                        {s.status}
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>
+                        Plateforme Digitalium
+                      </div>
+                      <Badge tone="archived" size="sm" dot>
+                        Signé · côté plateforme
                       </Badge>
                     </div>
                   </div>
-                ))}
-                <Button variant="success" icon="shieldCheck" style={{ marginTop: 8 }}>
-                  Lancer la signature
-                </Button>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      padding: 10,
+                      background: "var(--ink-50)",
+                      borderRadius: 6,
+                    }}
+                  >
+                    <Icon name="fingerprint" size={16} style={{ color: "var(--ink-500)" }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>
+                        {target.acronym !== "—" ? target.acronym : "Organisme"}
+                      </div>
+                      <Badge
+                        tone={data.convention.status === "signed" ? "archived" : "warning"}
+                        size="sm"
+                        dot
+                      >
+                        {data.convention.status === "signed"
+                          ? "Signé"
+                          : data.convention.status === "pending_signature"
+                            ? "En attente de signature"
+                            : "Brouillon"}
+                      </Badge>
+                    </div>
+                  </div>
+                  {data.conventionStepActive && data.convention.status !== "signed" && (
+                    <StartSignatureButton processId={data.processId} />
+                  )}
+                </div>
               </div>
-            </div>
-          </Card>
+            </Card>
+          )}
         </div>
       </div>
     </>

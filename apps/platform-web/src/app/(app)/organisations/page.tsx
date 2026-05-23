@@ -13,23 +13,31 @@ import {
   Th,
   Tr,
 } from "@workspace/ui"
-import { getPlatformOrgs } from "@workspace/mocks/platform"
+import { api } from "@workspace/backend/generated"
+import { convex } from "@/lib/convex"
+import { requirePlatformUser } from "@/lib/current-platform-user"
+import { RegisterOrganismDialog } from "./register-organism-dialog"
+import { OrganismActionsMenu } from "./organism-actions-menu"
 
 export default async function PlatformOrgsPage() {
-  const orgs = await getPlatformOrgs()
+  const { token } = await requirePlatformUser()
+  const [orgs, stats] = await Promise.all([
+    convex.query(api.platform.organisms.listOrganisms, { token }),
+    convex.query(api.platform.organisms.getRegistryStats, { token }),
+  ])
 
   return (
     <>
       <PageHeader
         breadcrumbs={["Organisations"]}
         title="Organisations enregistrées"
-        subtitle="47 administrations actives · 3 en onboarding · 1 suspendue"
+        subtitle={`${stats.active} actives · ${stats.onboarding} en onboarding · ${stats.suspended} suspendue${stats.suspended > 1 ? "s" : ""}`}
         actions={
           <>
             <Button variant="outline" icon="download">
               Export
             </Button>
-            <Button icon="plus">Enregistrer une administration</Button>
+            <RegisterOrganismDialog />
           </>
         }
       />
@@ -44,11 +52,24 @@ export default async function PlatformOrgsPage() {
         }}
       >
         <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10 }}>
-          <StatCard label="Total" value="51" icon="building" />
-          <StatCard label="Actives" value="47" icon="checkCircle" hint="92 %" />
-          <StatCard label="En onboarding" value="3" icon="userCheck" />
-          <StatCard label="Suspendues" value="1" icon="alertTriangle" />
-          <StatCard label="Provinces couvertes" value="9 / 9" icon="mapPin" />
+          <StatCard label="Total" value={String(stats.total)} icon="building" />
+          <StatCard
+            label="Actives"
+            value={String(stats.active)}
+            icon="checkCircle"
+            hint={
+              stats.total > 0
+                ? `${Math.round((stats.active / stats.total) * 100)} %`
+                : "—"
+            }
+          />
+          <StatCard label="En onboarding" value={String(stats.onboarding)} icon="userCheck" />
+          <StatCard label="Suspendues" value={String(stats.suspended)} icon="alertTriangle" />
+          <StatCard
+            label="Provinces couvertes"
+            value={`${stats.provinces} / 9`}
+            icon="mapPin"
+          />
         </div>
 
         <Card>
@@ -62,10 +83,10 @@ export default async function PlatformOrgsPage() {
           >
             <Tabs
               tabs={[
-                { id: "all", label: "Toutes (51)" },
-                { id: "act", label: "Actives (47)" },
-                { id: "on", label: "Onboarding (3)" },
-                { id: "sus", label: "Suspendues (1)" },
+                { id: "all", label: `Toutes (${stats.total})` },
+                { id: "act", label: `Actives (${stats.active})` },
+                { id: "on", label: `Onboarding (${stats.onboarding})` },
+                { id: "sus", label: `Suspendues (${stats.suspended})` },
               ]}
               current="all"
               variant="pill"
@@ -92,7 +113,7 @@ export default async function PlatformOrgsPage() {
             </thead>
             <tbody>
               {orgs.map((o) => (
-                <Tr key={o.name}>
+                <Tr key={o.id}>
                   <Td>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                       <Icon
@@ -130,7 +151,11 @@ export default async function PlatformOrgsPage() {
                   </Td>
                   <Td>{o.signedAt}</Td>
                   <Td>
-                    <Icon name="moreH" size={16} style={{ color: "var(--ink-400)" }} />
+                    <OrganismActionsMenu
+                      organismId={o.id}
+                      organismName={o.shortName ?? o.name}
+                      status={o.rawStatus}
+                    />
                   </Td>
                 </Tr>
               ))}

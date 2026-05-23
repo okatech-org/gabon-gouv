@@ -10,24 +10,16 @@ import {
   Tabs,
   type IconName,
 } from "@workspace/ui"
-import {
-  getImpactKpis,
-  getProvinces,
-  getSatisfactionDistribution,
-  getTopDemands,
-  getYearVolume,
-} from "@workspace/mocks/platform"
+import { api } from "@workspace/backend/generated"
+import { convex } from "@/lib/convex"
+import { requirePlatformUser } from "@/lib/current-platform-user"
 
-const MONTHS = ["Juin", "Juil.", "Août", "Sept.", "Oct.", "Nov.", "Déc.", "Janv.", "Févr.", "Mars", "Avril", "Mai"]
+const MONTHS_BACK = ["Juin", "Juil.", "Août", "Sept.", "Oct.", "Nov.", "Déc.", "Janv.", "Févr.", "Mars", "Avril", "Mai"]
 
 export default async function PlatformStatsPage() {
-  const [impactKpis, yearVolume, topDemands, provinces, satisfaction] = await Promise.all([
-    getImpactKpis(),
-    getYearVolume(),
-    getTopDemands(),
-    getProvinces(),
-    getSatisfactionDistribution(),
-  ])
+  const { token } = await requirePlatformUser()
+  const data = await convex.query(api.platform.stats.getImpactStats, { token })
+  const { kpis, yearVolume, topDemands, provinces, satisfactionDistribution } = data
 
   return (
     <>
@@ -62,14 +54,12 @@ export default async function PlatformStatsPage() {
       >
         {/* Key impact */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
-          {impactKpis.map((k) => (
+          {kpis.map((k) => (
             <StatCard
               key={k.label}
               label={k.label}
               value={k.value}
               icon={k.icon as IconName}
-              delta={k.delta}
-              deltaTone={k.deltaTone}
               hint={k.hint}
               accent={k.accent}
             />
@@ -104,7 +94,7 @@ export default async function PlatformStatsPage() {
               fontVariantNumeric: "tabular-nums",
             }}
           >
-            {MONTHS.map((m) => (
+            {MONTHS_BACK.map((m) => (
               <span key={m}>{m}</span>
             ))}
           </div>
@@ -114,6 +104,11 @@ export default async function PlatformStatsPage() {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
           <Card>
             <SectionHeading title="Top 8 démarches" level={3} />
+            {topDemands.length === 0 && (
+              <div style={{ padding: 12, fontSize: 13, color: "var(--ink-500)" }}>
+                Aucune demande agrégée pour l&apos;instant.
+              </div>
+            )}
             {topDemands.map((r) => (
               <div
                 key={r.title}
@@ -171,78 +166,84 @@ export default async function PlatformStatsPage() {
           <Card>
             <SectionHeading
               title="Répartition par province"
-              subtitle="Demandes émises en 2026, en milliers."
+              subtitle="Demandes émises, en milliers."
               level={3}
             />
-            <div
-              style={{
-                display: "flex",
-                alignItems: "flex-end",
-                gap: 6,
-                height: 220,
-                paddingTop: 12,
-              }}
-            >
-              {provinces.map((b, i) => (
-                <div
-                  key={b.province}
-                  style={{
-                    flex: 1,
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: 6,
-                    height: "100%",
-                  }}
-                >
+            {provinces.length === 0 ? (
+              <div style={{ padding: 12, fontSize: 13, color: "var(--ink-500)" }}>
+                Aucune donnée géographique agrégée.
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "flex-end",
+                  gap: 6,
+                  height: 220,
+                  paddingTop: 12,
+                }}
+              >
+                {provinces.map((b, i) => (
                   <div
+                    key={b.province}
                     style={{
                       flex: 1,
-                      width: "100%",
                       display: "flex",
-                      alignItems: "flex-end",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: 6,
+                      height: "100%",
                     }}
                   >
                     <div
                       style={{
+                        flex: 1,
                         width: "100%",
-                        height: `${b.pct}%`,
-                        background:
-                          i === 0 ? "var(--primary-500)" : "var(--primary-400)",
-                        borderRadius: "4px 4px 0 0",
-                        position: "relative",
+                        display: "flex",
+                        alignItems: "flex-end",
                       }}
                     >
-                      <span
+                      <div
                         style={{
-                          position: "absolute",
-                          top: -18,
-                          left: "50%",
-                          transform: "translateX(-50%)",
-                          fontSize: 11,
-                          fontWeight: 700,
-                          color: "var(--ink-700)",
+                          width: "100%",
+                          height: `${b.pct}%`,
+                          background:
+                            i === 0 ? "var(--primary-500)" : "var(--primary-400)",
+                          borderRadius: "4px 4px 0 0",
+                          position: "relative",
                         }}
                       >
-                        {b.value} k
-                      </span>
+                        <span
+                          style={{
+                            position: "absolute",
+                            top: -18,
+                            left: "50%",
+                            transform: "translateX(-50%)",
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: "var(--ink-700)",
+                          }}
+                        >
+                          {b.value} k
+                        </span>
+                      </div>
                     </div>
+                    <span
+                      style={{
+                        fontSize: 10,
+                        color: "var(--ink-600)",
+                        textAlign: "center",
+                        whiteSpace: "nowrap",
+                        transform: "rotate(-30deg)",
+                        transformOrigin: "top right",
+                      }}
+                    >
+                      {b.province}
+                    </span>
                   </div>
-                  <span
-                    style={{
-                      fontSize: 10,
-                      color: "var(--ink-600)",
-                      textAlign: "center",
-                      whiteSpace: "nowrap",
-                      transform: "rotate(-30deg)",
-                      transformOrigin: "top right",
-                    }}
-                  >
-                    {b.province}
-                  </span>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </Card>
         </div>
 
@@ -260,12 +261,15 @@ export default async function PlatformStatsPage() {
                 textAlign: "center",
               }}
             >
-              <b style={{ color: "var(--ink-900)" }}>271 678 / 312 480</b> demandes respectent
-              leur délai contractuel.
+              Estimation cible (données SLA bientôt branchées).
             </div>
           </Card>
           <Card>
-            <SectionHeading title="Satisfaction citoyenne" level={3} />
+            <SectionHeading
+              title="Satisfaction citoyenne"
+              subtitle="Données à venir (table satisfactionSurveys non encore branchée)."
+              level={3}
+            />
             <div
               style={{
                 display: "flex",
@@ -309,7 +313,7 @@ export default async function PlatformStatsPage() {
                     >
                       <div
                         style={{
-                          width: satisfaction[5 - s] + "%",
+                          width: satisfactionDistribution[5 - s] + "%",
                           height: "100%",
                           background: "var(--warning-500)",
                           borderRadius: 999,
@@ -324,20 +328,11 @@ export default async function PlatformStatsPage() {
                         textAlign: "right",
                       }}
                     >
-                      {satisfaction[5 - s]} %
+                      {satisfactionDistribution[5 - s]} %
                     </span>
                   </div>
                 ))}
               </div>
-            </div>
-            <div
-              style={{
-                fontSize: 12,
-                color: "var(--ink-500)",
-                textAlign: "center",
-              }}
-            >
-              Sur 18 412 avis vérifiés
             </div>
           </Card>
           <Card>
@@ -352,8 +347,7 @@ export default async function PlatformStatsPage() {
                 textAlign: "center",
               }}
             >
-              des démarches effectuées{" "}
-              <b style={{ color: "var(--ink-900)" }}>depuis un smartphone</b>.
+              Estimation cible (analytics mobile à câbler).
             </div>
           </Card>
         </div>

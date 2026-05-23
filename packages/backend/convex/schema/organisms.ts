@@ -102,6 +102,17 @@ export const organismsTables = {
     .index("by_process", ["processId"])
     .index("by_process_order", ["processId", "order"]),
 
+  // Référents désignés pendant l'onboarding (P3 - bloc « Référents »)
+  onboardingReferents: defineTable({
+    processId: v.id("onboardingProcesses"),
+    fullName: v.string(),
+    functionTitle: v.string(), // « Directeur général », « DSI »…
+    email: v.string(),
+    role: agentRoleValidator, // rôle Gabon Connect prévu pour ce référent
+    authMethod: authMethodValidator,
+    createdAt: v.number(),
+  }).index("by_process", ["processId"]),
+
   // ───────────────────────────────────────────────────────────
   // Conventions d'adhésion (P3 signature)
   // ───────────────────────────────────────────────────────────

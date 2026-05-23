@@ -266,6 +266,52 @@ export const reset = mutation({
       icon: "zap",
     })
 
+    const conseilConst = await ctx.db.insert("organisms", {
+      name: "Conseil constitutionnel",
+      shortName: "Cons. Constit.",
+      slug: "conseil-constitutionnel",
+      category: "institution",
+      tutelage: "Présidence",
+      province: "Estuaire",
+      provinceCode: "estuaire",
+      status: "onboarding",
+      connection: "—",
+      connectionKind: "none",
+      siege: "Place de l'Indépendance, Libreville",
+      phone: "+241 01 76 19 22",
+      icon: "shield",
+    })
+
+    const dgTourisme = await ctx.db.insert("organisms", {
+      name: "Direction Gén. du Tourisme",
+      shortName: "DG Tourisme",
+      slug: "dg-tourisme",
+      category: "direction_generale",
+      tutelage: "Min. Tourisme et Artisanat",
+      province: "Estuaire",
+      provinceCode: "estuaire",
+      status: "onboarding",
+      connection: "—",
+      connectionKind: "none",
+      icon: "mapPin",
+    })
+
+    // Organisme suspendu (P2 — registre)
+    const mairieTchibanga = await ctx.db.insert("organisms", {
+      name: "Mairie de Tchibanga",
+      slug: "mairie-tchibanga",
+      category: "collectivite",
+      tutelage: "Autonome",
+      province: "Nyanga",
+      provinceCode: "nyanga",
+      status: "suspended",
+      connection: "Portail",
+      connectionKind: "portal",
+      signedAt: "02/2025",
+      icon: "home",
+      volume30d: 0,
+    })
+
     // ════════════════════════════════════════════════════════
     // 3. Agents
     // ════════════════════════════════════════════════════════
@@ -999,6 +1045,105 @@ export const reset = mutation({
       generatedAt: now - 5 * day,
     })
 
+    // Référents désignés pour ARSEE
+    const ARSEE_REFERENTS = [
+      ["M. Théophile NTOUTOUME", "Directeur général", "t.ntoutoume@arsee.ga", "admin_organisme", "nip_carte_agent"],
+      ["Mme Léa MENGUE", "Chef du service juridique", "l.mengue@arsee.ga", "agent_superviseur", "nip_carte_agent"],
+      ["M. Eric ASSEKO", "DSI", "e.asseko@arsee.ga", "admin_technique", "nip_cle_api"],
+    ] as const
+    for (const [name, fn, email, role, auth] of ARSEE_REFERENTS) {
+      await ctx.db.insert("onboardingReferents", {
+        processId: onboardingArsee,
+        fullName: name,
+        functionTitle: fn,
+        email,
+        role,
+        authMethod: auth,
+        createdAt: now - 10 * day,
+      })
+    }
+
+    // Onboarding plus jeune — Conseil constitutionnel (étape référents)
+    const onboardingConst = await ctx.db.insert("onboardingProcesses", {
+      organismId: conseilConst,
+      currentStepKey: "referents",
+      initiatedByAgentId: herve,
+      initiatedAt: now - 8 * day,
+    })
+    for (let i = 0; i < 7; i++) {
+      const key = (
+        [
+          "identification",
+          "referents",
+          "habilitations",
+          "convention",
+          "services_catalog",
+          "integration_tests",
+          "production",
+        ] as const
+      )[i]
+      await ctx.db.insert("onboardingSteps", {
+        processId: onboardingConst,
+        key,
+        order: i,
+        status: i === 0 ? "done" : i === 1 ? "active" : "pending",
+        completedAt: i === 0 ? now - 6 * day : undefined,
+      })
+    }
+
+    // Onboarding tout neuf — DG Tourisme (étape identification)
+    const onboardingTour = await ctx.db.insert("onboardingProcesses", {
+      organismId: dgTourisme,
+      currentStepKey: "identification",
+      initiatedByAgentId: herve,
+      initiatedAt: now - 2 * day,
+    })
+    for (let i = 0; i < 7; i++) {
+      const key = (
+        [
+          "identification",
+          "referents",
+          "habilitations",
+          "convention",
+          "services_catalog",
+          "integration_tests",
+          "production",
+        ] as const
+      )[i]
+      await ctx.db.insert("onboardingSteps", {
+        processId: onboardingTour,
+        key,
+        order: i,
+        status: i === 0 ? "active" : "pending",
+      })
+    }
+
+    // ════════════════════════════════════════════════════════
+    // 13bis. Activité d'équipe (P1 — feed plateforme)
+    // ════════════════════════════════════════════════════════
+    const ACTIVITY = [
+      [yolande, "Yolande NGUEMA · DG État Civil", "a publié", "services", "Légalisation de signature", "/services", "layers", 18 * 60 * 1000],
+      [faustin, "Faustin MBOUMBA · DG Documentation", "a modifié", "services", "Workflow Passeport v3.1", "/services", "edit", 60 * 60 * 1000],
+      [herve, "Hervé MOUSSAVOU · Plateforme", "a accordé l'accès à", "organisms", "DG Tourisme", "/organisations", "userCheck", 3 * 60 * 60 * 1000],
+      [cyril, "Cyril NDONG · DG État Civil", "a signé", "documents", "Acte EC-LBV-2026-04812", "/correspondance", "shieldCheck", 4 * 60 * 60 * 1000],
+      [patrice, "Patrice MOUSSAVOU · DG État Civil", "a versé au SAE", "archives", "32 actes (Cote GA/EC/2026/048xx)", "/archives", "archive", 6 * 60 * 60 * 1000],
+      [herve, "Hervé MOUSSAVOU · Plateforme", "a initié l'onboarding de", "organisms", "Conseil constitutionnel", "/onboarding", "userCheck", 8 * day],
+      [herve, "Hervé MOUSSAVOU · Plateforme", "a initié l'onboarding de", "organisms", "DG Tourisme", "/onboarding", "userCheck", 2 * day],
+      [herve, "Hervé MOUSSAVOU · Plateforme", "a suspendu", "organisms", "Mairie de Tchibanga", "/organisations", "alertTriangle", 12 * 60 * 60 * 1000],
+    ] as const
+    for (const [agentId, displayName, verb, subjectKind, label, link, icon, ago] of ACTIVITY) {
+      await ctx.db.insert("teamActivities", {
+        actorAgentId: agentId,
+        actorDisplayName: displayName,
+        verb,
+        subjectKind,
+        subjectLabel: label,
+        linkTo: link,
+        iconKey: icon,
+        occurredAt: now - ago,
+      })
+    }
+
     // ════════════════════════════════════════════════════════
     // 14. Composants d'infrastructure (P1)
     // ════════════════════════════════════════════════════════
@@ -1093,12 +1238,14 @@ export const reset = mutation({
 
     return {
       seeded: true,
-      organisms: 9,
+      organisms: 12,
       agents: 6,
       citizens: 5,
       services: 4,
       serviceVariants: 3,
       requests: 5,
+      onboardingProcesses: 3,
+      activities: 8,
       message:
         "Seed appliqué. Connectez-vous avec NIP 198501100001 (Yolande NGUEMA, DG État Civil) ou NIP 196509100099 (Hervé MOUSSAVOU, plateforme).",
     }

@@ -1,40 +1,52 @@
 import type { ReactNode } from "react"
 import { AppHeader, Sidebar } from "@workspace/ui"
-import { getCurrentPlatformUser } from "@workspace/mocks/platform"
-import { PLATFORM_NAV } from "@/lib/platform-nav"
+import { api } from "@workspace/backend/generated"
+import { convex } from "@/lib/convex"
+import { requirePlatformUser } from "@/lib/current-platform-user"
+import { buildPlatformNav } from "@/lib/platform-nav"
 
 /**
- * Layout du shell console plateforme (Digitalium). Pose le header et la
- * sidebar pour toutes les pages console. Les pages elles-mêmes ne rendent
- * que leur propre contenu.
- *
- * Pas d'auth pour le moment : récupère juste l'utilisateur courant pour
- * alimenter l'AppHeader depuis les mocks.
+ * Shell de la console plateforme — guard d'auth + sidebar live.
  */
 export default async function PlatformShellLayout({
   children,
 }: {
   children: ReactNode
 }) {
-  const user = await getCurrentPlatformUser()
+  const { token, user } = await requirePlatformUser()
+  const counts = await convex
+    .query(api.platform.supervision.getSidebarCounts, { token })
+    .catch(() => ({ orgs: undefined, services: undefined, onboarding: undefined }))
+
+  const nav = buildPlatformNav({
+    orgs: counts.orgs,
+    services: counts.services,
+    onboarding: counts.onboarding,
+  })
 
   return (
     <div
       style={{
-        minHeight: "100vh",
+        height: "100dvh",
         display: "flex",
         flexDirection: "column",
         background: "var(--ink-100)",
+        overflow: "hidden",
       }}
     >
-      <AppHeader org={user.org} user={user.name} role={user.role} />
+      <AppHeader
+        org={user.organism?.name ?? "Gabon Connect — Console plateforme"}
+        user={user.name}
+        role="Admin plateforme"
+      />
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
-        <Sidebar items={PLATFORM_NAV} />
+        <Sidebar items={nav} />
         <main
           style={{
             flex: 1,
             minWidth: 0,
-            overflow: "auto",
+            overflowY: "auto",
+            overflowX: "hidden",
             display: "flex",
             flexDirection: "column",
           }}
