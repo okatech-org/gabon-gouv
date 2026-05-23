@@ -43,27 +43,32 @@ import {
 
 export const triggers = new Triggers<DataModel>()
 
+// NB : on utilise `idempotentTrigger()` partout pour tolérer les divergences
+// transitoires entre la table et l'arbre d'agrégat (notamment au reset du
+// seed et lors d'un backfill). Un delete d'une row absente de l'arbre est
+// silencieusement ignoré au lieu de jeter DELETE_MISSING_KEY.
+
 // ────────── citizens ──────────
-triggers.register("citizens", aggCitizensGlobal.trigger())
+triggers.register("citizens", aggCitizensGlobal.idempotentTrigger())
 
 // ────────── organisms ──────────
-triggers.register("organisms", aggOrgsByStatus.trigger())
+triggers.register("organisms", aggOrgsByStatus.idempotentTrigger())
 
 // ────────── requests ──────────
-triggers.register("requests", aggRequestsGlobal.trigger())
-triggers.register("requests", aggRequestsByOrg.trigger())
-triggers.register("requests", aggRequestsByOrgStatus.trigger())
-triggers.register("requests", aggRequestsByOrgAgent.trigger())
-triggers.register("requests", aggRequestsByService.trigger())
-triggers.register("requests", aggRequestsByServiceVariant.trigger())
+triggers.register("requests", aggRequestsGlobal.idempotentTrigger())
+triggers.register("requests", aggRequestsByOrg.idempotentTrigger())
+triggers.register("requests", aggRequestsByOrgStatus.idempotentTrigger())
+triggers.register("requests", aggRequestsByOrgAgent.idempotentTrigger())
+triggers.register("requests", aggRequestsByService.idempotentTrigger())
+triggers.register("requests", aggRequestsByServiceVariant.idempotentTrigger())
 
 // ────────── documents ──────────
-triggers.register("documents", aggDocumentsGlobal.trigger())
-triggers.register("documents", aggDocumentsByOrg.trigger())
+triggers.register("documents", aggDocumentsGlobal.idempotentTrigger())
+triggers.register("documents", aggDocumentsByOrg.idempotentTrigger())
 
 // ────────── archives ──────────
-triggers.register("archives", aggArchivesGlobal.trigger())
-triggers.register("archives", aggArchivesByOrgStatus.trigger())
+triggers.register("archives", aggArchivesGlobal.idempotentTrigger())
+triggers.register("archives", aggArchivesByOrgStatus.idempotentTrigger())
 
 // ────────── notifications ──────────
 // Trigger conditionnel : on n'insère dans l'arbre que les non lues.
