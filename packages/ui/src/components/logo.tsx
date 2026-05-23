@@ -1,11 +1,12 @@
 import type { CSSProperties, ReactNode } from "react"
+import Link from "next/link"
 
 export interface LogoProps {
   size?: number
   variant?: "default" | "light"
   subtitle?: string
   /**
-   * Si fourni, le logo entier est rendu comme un lien (`<a href>`).
+   * Si fourni, le logo entier est rendu comme un lien (`<Link href>`).
    * Par défaut `/` — passe `null` pour désactiver explicitement le lien.
    */
   href?: string | null
@@ -87,9 +88,9 @@ export const Logo = ({
 
   if (href) {
     return (
-      <a href={href} style={wrapperStyle} aria-label="Retour à l'accueil">
+      <Link href={href} style={wrapperStyle} aria-label="Retour à l'accueil">
         {content}
-      </a>
+      </Link>
     )
   }
   return <div style={wrapperStyle}>{content}</div>

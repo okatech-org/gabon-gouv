@@ -10,9 +10,13 @@
   "dependencies": {
     "react": "^19.2.4"
   },
+  "peerDependencies": {
+    "next": ">=15.0.0"
+  },
   "devDependencies": {
     "@types/react": "^19.2.10",
     "@workspace/tsconfig": "workspace:*",
+    "next": "^15.0.0",
     "typescript": "5.9.3"
   },
   "exports": {

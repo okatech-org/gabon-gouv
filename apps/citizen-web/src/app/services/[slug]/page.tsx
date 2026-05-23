@@ -1,7 +1,7 @@
+import Link from "next/link"
 import {
   Badge,
   Button,
-  Frame,
   Icon,
   Logo,
   RepublicBar,
@@ -28,7 +28,7 @@ export default async function CitizenServiceDetailPage({
   ]
 
   return (
-    <Frame width={1440} height={1100} style={{ background: "white", overflow: "hidden" }}>
+    <div style={{ minHeight: "100vh", background: "white" }}>
       <RepublicBar />
       <header
         style={{
@@ -42,26 +42,30 @@ export default async function CitizenServiceDetailPage({
       >
         <Logo />
         <nav style={{ display: "flex", gap: 24, marginLeft: 32 }}>
-          {navLinks.map((l, i) => (
-            <a
-              key={l.label}
-              href={l.href}
-              style={{
-                fontSize: 14,
-                fontWeight: i === 0 ? 700 : 500,
-                color: i === 0 ? "var(--primary-600)" : "var(--ink-700)",
-              }}
-            >
-              {l.label}
-            </a>
-          ))}
+          {navLinks.map((l, i) => {
+            const isInternal = l.href.startsWith("/")
+            const linkStyle = {
+              fontSize: 14,
+              fontWeight: i === 0 ? 700 : 500,
+              color: i === 0 ? "var(--primary-600)" : "var(--ink-700)",
+            } as const
+            return isInternal ? (
+              <Link key={l.label} href={l.href} style={linkStyle}>
+                {l.label}
+              </Link>
+            ) : (
+              <a key={l.label} href={l.href} style={linkStyle}>
+                {l.label}
+              </a>
+            )
+          })}
         </nav>
         <div style={{ flex: 1 }} />
-        <a href="/mon-espace" style={{ textDecoration: "none" }}>
+        <Link href="/mon-espace" style={{ textDecoration: "none" }}>
           <Button variant="secondary" icon="user">
             {citizen.name}
           </Button>
-        </a>
+        </Link>
       </header>
 
       <div
@@ -82,13 +86,13 @@ export default async function CitizenServiceDetailPage({
             color: "var(--ink-600)",
           }}
         >
-          <a href="/" style={{ color: "var(--ink-600)" }}>
+          <Link href="/" style={{ color: "var(--ink-600)" }}>
             Accueil
-          </a>
+          </Link>
           <Icon name="chevronRight" size={12} />
-          <a href="/" style={{ color: "var(--ink-600)" }}>
+          <Link href="/" style={{ color: "var(--ink-600)" }}>
             Démarches
-          </a>
+          </Link>
           <Icon name="chevronRight" size={12} />
           <span style={{ color: "var(--ink-600)" }}>
             {service.category}
@@ -418,7 +422,7 @@ export default async function CitizenServiceDetailPage({
                 >
                   4 étapes · environ 5 minutes. Vous pourrez sauvegarder à tout moment.
                 </p>
-                <a
+                <Link
                   href="/mon-espace/demarches/nouvelle"
                   style={{
                     textDecoration: "none",
@@ -433,7 +437,7 @@ export default async function CitizenServiceDetailPage({
                   >
                     Commencer
                   </Button>
-                </a>
+                </Link>
                 <Button
                   variant="ghost"
                   icon="bookmark"
@@ -513,6 +517,6 @@ export default async function CitizenServiceDetailPage({
           </aside>
         </div>
       </section>
-    </Frame>
+    </div>
   )
 }

@@ -1,7 +1,7 @@
+import Link from "next/link"
 import {
   Badge,
   Button,
-  Frame,
   Icon,
   Logo,
   RepublicBar,
@@ -58,7 +58,7 @@ export default async function CitizenHomePage() {
   ]
 
   return (
-    <Frame width={1440} height={1500} style={{ background: "white", overflow: "hidden" }}>
+    <div style={{ minHeight: "100vh", background: "white" }}>
       <RepublicBar />
       <header
         style={{
@@ -72,27 +72,31 @@ export default async function CitizenHomePage() {
       >
         <Logo subtitle="Guichet unique" />
         <nav style={{ display: "flex", gap: 24, marginLeft: 32 }}>
-          {navLinks.map((l, i) => (
-            <a
-              key={l.label}
-              href={l.href}
-              style={{
-                fontSize: 14,
-                fontWeight: i === 0 ? 700 : 500,
-                color: i === 0 ? "var(--primary-600)" : "var(--ink-700)",
-              }}
-            >
-              {l.label}
-            </a>
-          ))}
+          {navLinks.map((l, i) => {
+            const isInternal = l.href.startsWith("/")
+            const linkStyle = {
+              fontSize: 14,
+              fontWeight: i === 0 ? 700 : 500,
+              color: i === 0 ? "var(--primary-600)" : "var(--ink-700)",
+            } as const
+            return isInternal ? (
+              <Link key={l.label} href={l.href} style={linkStyle}>
+                {l.label}
+              </Link>
+            ) : (
+              <a key={l.label} href={l.href} style={linkStyle}>
+                {l.label}
+              </a>
+            )
+          })}
         </nav>
         <div style={{ flex: 1 }} />
         <span style={{ fontSize: 12, color: "var(--ink-600)" }}>République Gabonaise</span>
-        <a href="/mon-espace" style={{ textDecoration: "none" }}>
+        <Link href="/mon-espace" style={{ textDecoration: "none" }}>
           <Button variant="secondary" icon="user">
             Se connecter
           </Button>
-        </a>
+        </Link>
       </header>
 
       {/* Hero */}
@@ -187,20 +191,24 @@ export default async function CitizenHomePage() {
                 }}
               >
                 <span>Suggestions :</span>
-                {suggestions.map((s) => (
-                  <a
-                    key={s.label}
-                    href={s.href}
-                    style={{
-                      background: "var(--ink-100)",
-                      padding: "2px 10px",
-                      borderRadius: 999,
-                      color: "var(--ink-700)",
-                    }}
-                  >
-                    {s.label}
-                  </a>
-                ))}
+                {suggestions.map((s) => {
+                  const isInternal = s.href.startsWith("/")
+                  const chipStyle = {
+                    background: "var(--ink-100)",
+                    padding: "2px 10px",
+                    borderRadius: 999,
+                    color: "var(--ink-700)",
+                  } as const
+                  return isInternal ? (
+                    <Link key={s.label} href={s.href} style={chipStyle}>
+                      {s.label}
+                    </Link>
+                  ) : (
+                    <a key={s.label} href={s.href} style={chipStyle}>
+                      {s.label}
+                    </a>
+                  )
+                })}
               </div>
             </div>
 
@@ -304,9 +312,9 @@ export default async function CitizenHomePage() {
             title="Démarches par thème"
             subtitle="Parcourez les 128 services proposés par les administrations gabonaises."
             action={
-              <a href="/administrations" style={{ fontSize: 14, fontWeight: 600 }}>
+              <Link href="/administrations" style={{ fontSize: 14, fontWeight: 600 }}>
                 Voir tout l&apos;annuaire →
-              </a>
+              </Link>
             }
           />
           <div
@@ -388,7 +396,7 @@ export default async function CitizenHomePage() {
             }}
           >
             {topServices.map((s) => (
-              <a
+              <Link
                 key={s.id}
                 href={`/services/${s.id}`}
                 style={{
@@ -459,7 +467,7 @@ export default async function CitizenHomePage() {
                     {s.fee}
                   </span>
                 </div>
-              </a>
+              </Link>
             ))}
           </div>
         </div>
@@ -569,6 +577,6 @@ export default async function CitizenHomePage() {
           <div>© 2026 République Gabonaise · Gabon Connect</div>
         </div>
       </footer>
-    </Frame>
+    </div>
   )
 }

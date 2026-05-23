@@ -1,15 +1,14 @@
 "use client"
 
+import Link from "next/link"
 import { useState } from "react"
 import {
   Alert,
-  AppHeader,
   Badge,
   Button,
   Card,
   Checkbox,
   Field,
-  Frame,
   Icon,
   Progress,
   Radio,
@@ -29,8 +28,7 @@ export function DepositWizard({ initialStep = 0, citizen }: DepositWizardProps) 
   const steps = ["Service", "Informations", "Pièces justificatives", "Vérification"]
 
   return (
-    <Frame width={1440} height={900}>
-      <AppHeader user={citizen.name} role="Citoyenne" />
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       <div
         style={{
           padding: "20px 32px",
@@ -48,9 +46,9 @@ export function DepositWizard({ initialStep = 0, citizen }: DepositWizardProps) 
             marginBottom: 8,
           }}
         >
-          <a href="#">Mes démarches</a>
+          <Link href="/mon-espace">Mes démarches</Link>
           <Icon name="chevronRight" size={12} />
-          <a href="#">Nouveau dépôt</a>
+          <span>Nouveau dépôt</span>
           <Icon name="chevronRight" size={12} />
           <span style={{ color: "var(--ink-900)", fontWeight: 600 }}>
             Acte de naissance
@@ -84,9 +82,9 @@ export function DepositWizard({ initialStep = 0, citizen }: DepositWizardProps) 
 
       <main
         style={{
+          flex: 1,
           padding: "28px 32px",
           background: "var(--ink-100)",
-          minHeight: 540,
         }}
       >
         <div style={{ maxWidth: 920, margin: "0 auto" }}>
@@ -129,7 +127,7 @@ export function DepositWizard({ initialStep = 0, citizen }: DepositWizardProps) 
           </Button>
         )}
       </footer>
-    </Frame>
+    </div>
   )
 }
 
