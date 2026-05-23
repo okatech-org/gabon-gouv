@@ -11,8 +11,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@workspace/backend": "workspace:*",
     "@workspace/mocks": "workspace:*",
     "@workspace/ui": "workspace:*",
+    "convex": "^1.34.1",
     "next": "^15.5.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"

@@ -115,6 +115,21 @@ input, textarea, select { font-family: inherit; }
 :focus-visible { outline: none; box-shadow: var(--shadow-focus); border-radius: var(--radius-sm); }
 
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* Assistant IA — animations */
+@keyframes gc-wave {
+  0%   { transform: scaleY(0.35); }
+  100% { transform: scaleY(1.05); }
+}
+@keyframes gc-ping {
+  0%   { transform: scale(1);   opacity: 0.7; }
+  80%  { transform: scale(1.35); opacity: 0; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+@keyframes gc-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(35,120,195,.4); }
+  50%      { box-shadow: 0 0 0 8px rgba(35,120,195,0); }
+}
 </style>
 <style>
   *, *::before, *::after { box-sizing: border-box; }
@@ -142,6 +157,7 @@ input, textarea, select { font-family: inherit; }
 <script type="text/babel" src="screens/citizen.jsx"></script>
 <script type="text/babel" src="screens/admin.jsx"></script>
 <script type="text/babel" src="screens/platform.jsx"></script>
+<script type="text/babel" src="screens/assistant.jsx"></script>
 
 <!-- Cover -->
 <script type="text/babel">
@@ -412,8 +428,7 @@ function App() {
       </DCSection>
 
       {/* P. Plateforme */}
-      <DCSection id="P" title="Application Plateforme — console.connect" subtitle="Console super-admin Digitalium · vue cross-organismes, onboarding, statistiques d'impact">
-        <DCArtboard id="P1" label="P1 · Supervision multi-organismes" width={1440} height={1300}>
+      <DCSection id="P" title="Application Plateforme — console.connect" subtitle="Console super-admin Digitalium · vue cross-organismes, onboarding, statistiques d'impact">        <DCArtboard id="P1" label="P1 · Supervision multi-organismes" width={1440} height={1300}>
           <PlatformSupervision/>
         </DCArtboard>
         <DCArtboard id="P2" label="P2 · Organisations enregistrées" width={1440} height={1000}>
@@ -425,6 +440,34 @@ function App() {
         <DCArtboard id="P4" label="P4 · Statistiques d'usage" width={1440} height={1200}>
           <PlatformStats/>
         </DCArtboard>
+      </DCSection>
+
+      {/* AI · Assistant IA contextuel */}
+      <DCSection id="AI" title="Assistant IA contextuel — brique transverse" subtitle="Une bulle flottante présente dans les 3 apps · chat texte ou mode audio non-bloquant · contexte détecté à chaque écran">
+        <DCArtboard id="AI-0" label="AI-0 · Concept & 3 états" width={1440} height={900}>
+          <AssistantConcept/>
+        </DCArtboard>
+        <DCArtboard id="AI-1" label="AI-1 · Pastille dormante — accueil citoyen" width={1440} height={1500}>
+          <AssistantOnCitizenHome/>
+        </DCArtboard>
+        <DCArtboard id="AI-2" label="AI-2 · Chat texte — wizard citoyen, étape pièces" width={1440} height={900}>
+          <AssistantChatOnCitizenWizard/>
+        </DCArtboard>
+        <DCArtboard id="AI-3" label="AI-3 · Mode audio — wizard citoyen (non-bloquant)" width={1440} height={900}>
+          <AssistantAudioOnCitizenWizard/>
+        </DCArtboard>
+        <DCArtboard id="AI-4" label="AI-4 · Chat texte — instruction côté agent" width={1440} height={1100}>
+          <AssistantChatOnAdminInstruction/>
+        </DCArtboard>
+        <DCArtboard id="AI-5" label="AI-5 · Mode audio — revue documentaire agent" width={1440} height={1100}>
+          <AssistantAudioOnAdminInstruction/>
+        </DCArtboard>
+        <DCArtboard id="AI-6" label="AI-6 · Chat texte — console plateforme" width={1440} height={1300}>
+          <AssistantChatOnPlatform/>
+        </DCArtboard>
+        <DCPostIt top={-20} left={1500} rotate={-2} width={240}>
+          Même composant <b>AssistantBubble / Panel / AudioPill</b>, branché contextuellement dans chaque app. Le bandeau de contexte change selon l'écran.
+        </DCPostIt>
       </DCSection>
 
     </DesignCanvas>

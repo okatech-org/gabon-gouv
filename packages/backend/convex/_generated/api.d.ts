@@ -8,7 +8,17 @@
  * @module
  */
 
+import type * as admin_archives from "../admin/archives.js";
+import type * as admin_citizens from "../admin/citizens.js";
+import type * as admin_correspondence from "../admin/correspondence.js";
+import type * as admin_dashboard from "../admin/dashboard.js";
+import type * as admin_directory from "../admin/directory.js";
+import type * as admin_mutations from "../admin/mutations.js";
+import type * as admin_requests from "../admin/requests.js";
+import type * as admin_services from "../admin/services.js";
+import type * as auth from "../auth.js";
 import type * as health from "../health.js";
+import type * as seed from "../seed.js";
 
 import type {
   ApiFromModules,
@@ -17,7 +27,17 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "admin/archives": typeof admin_archives;
+  "admin/citizens": typeof admin_citizens;
+  "admin/correspondence": typeof admin_correspondence;
+  "admin/dashboard": typeof admin_dashboard;
+  "admin/directory": typeof admin_directory;
+  "admin/mutations": typeof admin_mutations;
+  "admin/requests": typeof admin_requests;
+  "admin/services": typeof admin_services;
+  auth: typeof auth;
   health: typeof health;
+  seed: typeof seed;
 }>;
 
 /**
