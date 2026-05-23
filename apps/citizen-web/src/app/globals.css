@@ -1,0 +1,7 @@
+@import "@workspace/ui/fonts.css";
+@import "@workspace/ui/tokens.css";
+
+html,
+body {
+  background: var(--ink-100);
+}

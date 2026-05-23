@@ -1,0 +1,32 @@
+{
+  "extends": "@workspace/tsconfig/nextjs.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ],
+      "@workspace/ui": [
+        "../../packages/ui/src"
+      ],
+      "@workspace/ui/*": [
+        "../../packages/ui/src/*"
+      ],
+      "@workspace/mocks": [
+        "../../packages/mocks/src"
+      ],
+      "@workspace/mocks/*": [
+        "../../packages/mocks/src/*"
+      ]
+    },
+    "jsx": "preserve"
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

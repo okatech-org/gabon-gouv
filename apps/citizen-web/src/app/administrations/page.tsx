@@ -1,0 +1,205 @@
+import {
+  Button,
+  Frame,
+  Icon,
+  Logo,
+  PageHeader,
+  RepublicBar,
+  TextInput,
+  type IconName,
+} from "@workspace/ui"
+import {
+  DIRECTORY_FILTERS,
+  getCurrentCitizen,
+  getDirectoryOrgs,
+} from "@workspace/mocks/citizen"
+
+export default async function CitizenDirectoryPage() {
+  const [citizen, orgs] = await Promise.all([
+    getCurrentCitizen(),
+    getDirectoryOrgs(),
+  ])
+  const navLinks: { label: string; href: string }[] = [
+    { label: "Démarches", href: "/" },
+    { label: "Administrations", href: "/administrations" },
+    { label: "Mon espace", href: "/mon-espace" },
+    { label: "Aide", href: "#" },
+  ]
+
+  return (
+    <Frame width={1440} height={1000} style={{ background: "white", overflow: "hidden" }}>
+      <RepublicBar />
+      <header
+        style={{
+          borderBottom: "1px solid var(--ink-200)",
+          padding: "14px 64px",
+          display: "flex",
+          alignItems: "center",
+          gap: 24,
+          background: "white",
+        }}
+      >
+        <Logo />
+        <nav style={{ display: "flex", gap: 24, marginLeft: 32 }}>
+          {navLinks.map((l, i) => (
+            <a
+              key={l.label}
+              href={l.href}
+              style={{
+                fontSize: 14,
+                fontWeight: i === 1 ? 700 : 500,
+                color: i === 1 ? "var(--primary-600)" : "var(--ink-700)",
+              }}
+            >
+              {l.label}
+            </a>
+          ))}
+        </nav>
+        <div style={{ flex: 1 }} />
+        <a href="/mon-espace" style={{ textDecoration: "none" }}>
+          <Button variant="secondary" icon="user">
+            {citizen.name}
+          </Button>
+        </a>
+      </header>
+
+      <PageHeader
+        title="Annuaire des administrations"
+        subtitle="47 organismes publics enregistrés sur Gabon Connect."
+        actions={
+          <div style={{ display: "flex", gap: 8 }}>
+            <TextInput
+              placeholder="Rechercher une administration…"
+              icon="search"
+              style={{ width: 280 }}
+            />
+            <Button variant="outline" icon="filter">
+              Filtrer
+            </Button>
+          </div>
+        }
+      />
+
+      <section style={{ padding: "24px 32px", background: "var(--ink-50)" }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+          {DIRECTORY_FILTERS.map((t, i) => (
+            <button
+              key={t}
+              style={{
+                padding: "6px 14px",
+                borderRadius: 999,
+                border: "1px solid var(--ink-200)",
+                background: i === 0 ? "var(--primary-500)" : "white",
+                color: i === 0 ? "white" : "var(--ink-800)",
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3, 1fr)",
+            gap: 12,
+          }}
+        >
+          {orgs.map((o) => (
+            <div
+              key={o.name}
+              style={{
+                background: "white",
+                border: "1px solid var(--ink-200)",
+                borderRadius: 10,
+                padding: 18,
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 12,
+                }}
+              >
+                <span
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 8,
+                    background: o.tone + "14",
+                    color: o.tone,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <Icon name={o.icon as IconName} size={20} />
+                </span>
+                <div style={{ flex: 1 }}>
+                  <div
+                    style={{
+                      fontSize: 14.5,
+                      fontWeight: 700,
+                      color: "var(--ink-900)",
+                      lineHeight: 1.3,
+                    }}
+                  >
+                    {o.name}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "var(--ink-600)",
+                      marginTop: 2,
+                    }}
+                  >
+                    {o.category} · {o.theme}
+                  </div>
+                </div>
+              </div>
+              <div
+                style={{
+                  height: 1,
+                  background: "var(--ink-150)",
+                  margin: "4px 0",
+                }}
+              />
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  fontSize: 12.5,
+                }}
+              >
+                <span style={{ color: "var(--ink-700)" }}>
+                  <b>{o.servicesCount}</b> services en ligne
+                </span>
+                <span style={{ color: "var(--ink-700)" }}>
+                  Délai moy. <b>{o.delay}</b>
+                </span>
+              </div>
+              <a
+                href="#"
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  marginTop: 2,
+                }}
+              >
+                Voir les démarches →
+              </a>
+            </div>
+          ))}
+        </div>
+      </section>
+    </Frame>
+  )
+}

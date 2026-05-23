@@ -1,0 +1,27 @@
+{
+  "name": "platform-web",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 4002",
+    "build": "next build",
+    "start": "next start -p 4002",
+    "lint": "echo 'no lint configured'",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@workspace/mocks": "workspace:*",
+    "@workspace/ui": "workspace:*",
+    "next": "^15.5.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.18.0",
+    "@types/react": "^19.2.10",
+    "@types/react-dom": "^19.2.3",
+    "@workspace/tsconfig": "workspace:*",
+    "typescript": "5.9.3"
+  }
+}

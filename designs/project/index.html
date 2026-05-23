@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Gabon Connect — Guichet unique administratif</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Marianne:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style id="inlined-tokens">
+/* ============================================================
+   Gabon Connect — Design tokens
+   Bleu institutionnel + filet tricolore Gabon
+   ============================================================ */
+
+:root {
+  /* ---- Couleur primaire (USWDS-like institutional blue) ---- */
+  --primary-50: #eff6fb;
+  --primary-100: #d9e8f6;
+  --primary-200: #aacdec;
+  --primary-300: #73b3e7;
+  --primary-400: #2378c3;
+  --primary-500: #1a4480;
+  --primary-600: #162e51;
+  --primary-700: #0b2350;
+  --primary-800: #061a3d;
+
+  /* ---- Neutrals (cool gray, slight blue cast) ---- */
+  --ink-900: #0e1a2b;
+  --ink-800: #1c2a3e;
+  --ink-700: #2c3a4f;
+  --ink-600: #4a5876;
+  --ink-500: #6b7a96;
+  --ink-400: #92a0b8;
+  --ink-300: #c5cdd9;
+  --ink-200: #e1e6ee;
+  --ink-150: #ebeff5;
+  --ink-100: #f3f5f9;
+  --ink-50:  #f8fafc;
+  --ink-0:   #ffffff;
+
+  /* ---- Semantic ---- */
+  --success-50:  #ecf3ec;
+  --success-100: #d8eed8;
+  --success-500: #2e8540;
+  --success-600: #1f6b30;
+  --warning-50:  #fff5e0;
+  --warning-100: #ffe8b9;
+  --warning-500: #b88600;
+  --warning-600: #8c6500;
+  --danger-50:  #fbe9e9;
+  --danger-100: #f8d7d7;
+  --danger-500: #b50909;
+  --danger-600: #8a0303;
+  --info-50:  #eaf3fb;
+  --info-100: #d4e6f7;
+  --info-500: #1a4480;
+  --info-600: #162e51;
+
+  /* ---- Status archivistique (palette dédiée) ---- */
+  --status-active: #1a4480;
+  --status-active-bg: #eff6fb;
+  --status-semi: #4a5876;
+  --status-semi-bg: #ebeff5;
+  --status-inactive: #6b7a96;
+  --status-inactive-bg: #f3f5f9;
+  --status-archived: #2e8540;
+  --status-archived-bg: #ecf3ec;
+  --status-destruct: #b88600;
+  --status-destruct-bg: #fff5e0;
+  --status-error: #b50909;
+  --status-error-bg: #fbe9e9;
+
+  /* ---- Élévations / radius ---- */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  --shadow-xs: 0 1px 2px rgba(14, 26, 43, 0.05);
+  --shadow-sm: 0 1px 3px rgba(14, 26, 43, 0.08), 0 1px 2px rgba(14, 26, 43, 0.04);
+  --shadow-md: 0 4px 12px rgba(14, 26, 43, 0.08), 0 2px 4px rgba(14, 26, 43, 0.04);
+  --shadow-lg: 0 12px 32px rgba(14, 26, 43, 0.12), 0 4px 12px rgba(14, 26, 43, 0.06);
+  --shadow-focus: 0 0 0 3px rgba(35, 120, 195, 0.35);
+
+  /* ---- Type ---- */
+  --font-sans: 'Marianne', -apple-system, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* ---- Spacing (4px base) ---- */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px;  --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px;  --sp-10: 40px;
+  --sp-12: 48px; --sp-16: 64px; --sp-20: 80px;
+}
+
+/* Reset minimal */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: var(--font-sans);
+  color: var(--ink-900);
+  background: var(--ink-100);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+h1, h2, h3, h4, h5, h6 { margin: 0; font-weight: 700; line-height: 1.2; color: var(--ink-900); }
+p { margin: 0; }
+button { font-family: inherit; cursor: pointer; }
+a { color: var(--primary-500); text-decoration: none; }
+a:hover { text-decoration: underline; }
+input, textarea, select { font-family: inherit; }
+:focus-visible { outline: none; box-shadow: var(--shadow-focus); border-radius: var(--radius-sm); }
+
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+</style>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; font-family: var(--font-sans); color: var(--ink-900); background: #f0eee9; }
+  button { font-family: inherit; }
+  kbd { font-family: var(--font-mono); }
+</style>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- Composants partagés -->
+<script type="text/babel" src="components.jsx"></script>
+
+<!-- Design canvas + tweaks panel -->
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+
+<!-- Écrans par app -->
+<script type="text/babel" src="screens/design-system.jsx"></script>
+<script type="text/babel" src="screens/citizen.jsx"></script>
+<script type="text/babel" src="screens/admin.jsx"></script>
+<script type="text/babel" src="screens/platform.jsx"></script>
+
+<!-- Cover -->
+<script type="text/babel">
+const CoverSlide = () => (
+  <div style={{
+    width: '100%', height: '100%',
+    background: 'linear-gradient(135deg, var(--primary-700) 0%, var(--primary-500) 60%, var(--primary-400) 100%)',
+    color: 'white', padding: 80, display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden',
+    fontFamily: 'var(--font-sans)',
+  }}>
+    {/* filet tricolore */}
+    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 6, display: 'flex' }}>
+      <span style={{ flex: 1, background: '#009e60' }}/>
+      <span style={{ flex: 1, background: '#fcd116' }}/>
+      <span style={{ flex: 1, background: '#3a75c4' }}/>
+    </div>
+
+    {/* motif géométrique */}
+    <svg width="780" height="780" viewBox="0 0 100 100" style={{ position: 'absolute', right: -200, bottom: -220, opacity: 0.07 }}>
+      <circle cx="50" cy="50" r="44" fill="none" stroke="white" strokeWidth="0.3"/>
+      <circle cx="50" cy="50" r="36" fill="none" stroke="white" strokeWidth="0.25"/>
+      <circle cx="50" cy="50" r="28" fill="none" stroke="white" strokeWidth="0.25"/>
+      <circle cx="50" cy="50" r="20" fill="none" stroke="white" strokeWidth="0.25"/>
+      <circle cx="50" cy="50" r="12" fill="none" stroke="white" strokeWidth="0.25"/>
+      <path d="M50 6 V94 M6 50 H94 M18 18 L82 82 M82 18 L18 82" stroke="white" strokeWidth="0.25"/>
+    </svg>
+
+    {/* en-tête */}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, position: 'relative' }}>
+      <span style={{
+        width: 56, height: 56, borderRadius: 10, background: 'white',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        boxShadow: '0 6px 16px rgba(0,0,0,.18)',
+      }}>
+        <svg width="40" height="40" viewBox="0 0 32 32" fill="none">
+          <rect x="3" y="3" width="6" height="2" fill="#009e60"/>
+          <rect x="3" y="6" width="6" height="2" fill="#fcd116"/>
+          <rect x="3" y="9" width="6" height="2" fill="#3a75c4"/>
+          <path d="M22 12.5a6.5 6.5 0 1 0 0 8.5h-5" stroke="#162e51" strokeWidth="2.2" strokeLinecap="round" fill="none"/>
+          <path d="M22 17h-3" stroke="#162e51" strokeWidth="2.2" strokeLinecap="round"/>
+        </svg>
+      </span>
+      <div>
+        <div style={{ fontSize: 26, fontWeight: 900, letterSpacing: '-0.01em' }}>Gabon<span style={{ opacity: 0.6 }}>Connect</span></div>
+        <div style={{ fontSize: 12, opacity: 0.75, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600 }}>République Gabonaise · Guichet unique</div>
+      </div>
+    </div>
+
+    {/* main */}
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', maxWidth: 1000, position: 'relative' }}>
+      <div style={{ fontSize: 14, opacity: 0.75, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 20, fontWeight: 600 }}>
+        Plateforme administrative unifiée · POC fonctionnel
+      </div>
+      <h1 style={{ fontSize: 86, lineHeight: 1, letterSpacing: '-0.03em', margin: 0, fontWeight: 900, color: 'white' }}>
+        Une plateforme,<br/>
+        <span style={{ opacity: 0.65 }}>toutes les administrations.</span>
+      </h1>
+      <p style={{ fontSize: 22, lineHeight: 1.45, marginTop: 32, opacity: 0.88, fontWeight: 400, maxWidth: 820 }}>
+        Le guichet unique des démarches gabonaises. Trois applications, une seule identité graphique :
+        un espace pour les citoyens, un back-office pour les administrations, une console pour piloter l'écosystème.
+      </p>
+    </div>
+
+    {/* footer stats */}
+    <div style={{ display: 'flex', gap: 56, fontSize: 14, paddingTop: 32, borderTop: '1px solid rgba(255,255,255,0.18)', position: 'relative' }}>
+      <div>
+        <div style={{ opacity: 0.6, fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4, fontWeight: 600 }}>Applications</div>
+        <div style={{ fontSize: 22, fontWeight: 700 }}>3 micro-apps</div>
+      </div>
+      <div>
+        <div style={{ opacity: 0.6, fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4, fontWeight: 600 }}>Écrans hi-fi</div>
+        <div style={{ fontSize: 22, fontWeight: 700 }}>21 maquettes</div>
+      </div>
+      <div>
+        <div style={{ opacity: 0.6, fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4, fontWeight: 600 }}>Cadre légal</div>
+        <div style={{ fontSize: 22, fontWeight: 700 }}>NF Z42-013 · Loi 001/2011</div>
+      </div>
+      <div>
+        <div style={{ opacity: 0.6, fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4, fontWeight: 600 }}>Souveraineté</div>
+        <div style={{ fontSize: 22, fontWeight: 700 }}>Hébergement Gabon 🇬🇦</div>
+      </div>
+    </div>
+  </div>
+);
+window.CoverSlide = CoverSlide;
+
+/* ---------- Architecture overview ---------- */
+const ArchitectureSlide = () => (
+  <div style={{ width: '100%', height: '100%', background: 'white', padding: '56px 72px', fontFamily: 'var(--font-sans)', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ display: 'flex', height: 3, marginBottom: 32 }}>
+      <span style={{ flex: 1, background: '#009e60' }}/>
+      <span style={{ flex: 1, background: '#fcd116' }}/>
+      <span style={{ flex: 1, background: '#3a75c4' }}/>
+    </div>
+    <Badge tone="primary" dot>Architecture en micro-applications</Badge>
+    <h1 style={{ fontSize: 44, letterSpacing: '-0.02em', marginTop: 14, maxWidth: 900, lineHeight: 1.1 }}>
+      Trois applications, <span style={{ color: 'var(--primary-500)' }}>une identité graphique commune</span>, un socle partagé.
+    </h1>
+    <p style={{ fontSize: 17, color: 'var(--ink-600)', marginTop: 14, maxWidth: 920, lineHeight: 1.55 }}>
+      Chaque profil utilisateur dispose de son application. Toutes partagent les mêmes tokens de design, les mêmes composants, et s'appuient sur des services socles (identité numérique, signature électronique, archivage à valeur probante).
+    </p>
+
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 18, marginTop: 36 }}>
+      {[
+        {
+          tag: 'Application Citoyen', n: '01', icon: 'user',
+          title: 'gabon.connect',
+          desc: 'Vitrine publique + dashboard personnel. Catalogue de 128 services, dépôt en ligne, suivi en temps réel, documents reçus avec QR de vérification.',
+          users: '~ 318 000 citoyens', pages: '7 écrans',
+        },
+        {
+          tag: 'Application Administration', n: '02', icon: 'building',
+          title: 'admin.connect',
+          desc: 'Back-office d\'un organisme. File de demandes, instruction, dossier citoyen 360°, génération automatique d\'actes, correspondance inter-admin sécurisée, archivage SAE.',
+          users: '47 administrations', pages: '9 écrans',
+        },
+        {
+          tag: 'Application Plateforme', n: '03', icon: 'activity',
+          title: 'console.connect',
+          desc: 'Console super-admin Digitalium. Supervision multi-organismes, onboarding, statistiques d\'usage, monitoring d\'infrastructure.',
+          users: 'Équipe Digitalium', pages: '4 écrans',
+        },
+      ].map((c, i) => (
+        <div key={c.n} style={{
+          border: `1px solid ${i === 1 ? 'var(--primary-500)' : 'var(--ink-200)'}`,
+          background: i === 1 ? 'var(--primary-50)' : 'white',
+          borderRadius: 12, padding: 22, display: 'flex', flexDirection: 'column', gap: 10,
+          position: 'relative',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--primary-500)', fontWeight: 700 }}>{c.n}</span>
+            <Badge tone={i === 1 ? 'primary' : 'neutral'} size="sm">{c.tag}</Badge>
+          </div>
+          <span style={{ width: 44, height: 44, borderRadius: 8, background: 'var(--primary-500)', color: 'white', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name={c.icon} size={22}/>
+          </span>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--ink-700)', fontWeight: 700 }}>{c.title}</div>
+          <p style={{ fontSize: 13.5, color: 'var(--ink-700)', lineHeight: 1.55, marginTop: 2 }}>{c.desc}</p>
+          <div style={{ height: 1, background: 'var(--ink-200)', margin: '4px 0' }}/>
+          <div style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--ink-600)' }}>
+            <span><b style={{ color: 'var(--ink-900)' }}>{c.users}</b></span>
+            <span>·</span>
+            <span><b style={{ color: 'var(--ink-900)' }}>{c.pages}</b></span>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    {/* socle */}
+    <div style={{ marginTop: 28, padding: '20px 24px', background: 'var(--ink-900)', color: 'white', borderRadius: 12, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 24, alignItems: 'center' }}>
+      <div>
+        <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Socle partagé</div>
+        <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4 }}>Briques transverses</div>
+      </div>
+      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+        {[
+          { i: 'fingerprint', t: 'Identité numérique (NIP)' },
+          { i: 'shieldCheck', t: 'Signature électronique' },
+          { i: 'archive', t: 'SAE valeur probante' },
+          { i: 'mail', t: 'Messagerie S/MIME' },
+          { i: 'cpu', t: 'Génération automatique' },
+          { i: 'database', t: 'Données souveraines' },
+        ].map(b => (
+          <div key={b.t} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', background: 'rgba(255,255,255,.08)', borderRadius: 6, fontSize: 12.5, fontWeight: 600 }}>
+            <Icon name={b.i} size={14}/>{b.t}
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+);
+window.ArchitectureSlide = ArchitectureSlide;
+</script>
+
+<!-- App principale -->
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+function App() {
+  return (
+    <DesignCanvas>
+
+      {/* INTRO */}
+      <DCSection id="intro" title="Gabon Connect — Plateforme administrative" subtitle="Guichet unique de la République Gabonaise · 21 écrans hi-fi · 3 micro-applications">
+        <DCArtboard id="cover" label="Couverture" width={1440} height={900}>
+          <CoverSlide/>
+        </DCArtboard>
+        <DCArtboard id="archi" label="Architecture en micro-applications" width={1440} height={900}>
+          <ArchitectureSlide/>
+        </DCArtboard>
+        <DCArtboard id="ds" label="Design system · tokens & composants" width={1440} height={1820}>
+          <DesignSystemPage/>
+        </DCArtboard>
+        <DCPostIt top={-20} left={1500} rotate={3} width={220}>
+          Identité graphique <b>conservée</b> du POC SAE : Marianne, bleu institutionnel, filet tricolore Gabon. Mais rebrandée en <b>Gabon Connect</b>.
+        </DCPostIt>
+      </DCSection>
+
+      {/* C. Citoyen */}
+      <DCSection id="C" title="Application Citoyen — gabon.connect" subtitle="Vitrine publique + dashboard personnel · catalogue, dépôt, suivi, documents">
+        <DCArtboard id="C1" label="C1 · Accueil public + catalogue" width={1440} height={1500}>
+          <CitizenHome/>
+        </DCArtboard>
+        <DCArtboard id="C2" label="C2 · Page service (acte de naissance)" width={1440} height={1100}>
+          <CitizenServiceDetail/>
+        </DCArtboard>
+        <DCArtboard id="C3" label="C3 · Dashboard citoyen" width={1440} height={900}>
+          <CitizenDashboard/>
+        </DCArtboard>
+        <DCArtboard id="C4-1" label="C4 · Dépôt étape 1 — Service" width={1440} height={900}>
+          <CitizenDeposit initialStep={0}/>
+        </DCArtboard>
+        <DCArtboard id="C4-2" label="C4 · Dépôt étape 2 — Informations" width={1440} height={900}>
+          <CitizenDeposit initialStep={1}/>
+        </DCArtboard>
+        <DCArtboard id="C4-3" label="C4 · Dépôt étape 3 — Pièces" width={1440} height={900}>
+          <CitizenDeposit initialStep={2}/>
+        </DCArtboard>
+        <DCArtboard id="C4-4" label="C4 · Dépôt étape 4 — Vérification" width={1440} height={900}>
+          <CitizenDeposit initialStep={3}/>
+        </DCArtboard>
+        <DCArtboard id="C5" label="C5 · Suivi d'une demande" width={1440} height={1000}>
+          <CitizenTracking/>
+        </DCArtboard>
+        <DCArtboard id="C6" label="C6 · Document reçu + récépissé scellé" width={1440} height={950}>
+          <CitizenDocument/>
+        </DCArtboard>
+        <DCArtboard id="C7" label="C7 · Annuaire des administrations" width={1440} height={1000}>
+          <CitizenDirectory/>
+        </DCArtboard>
+        <DCPostIt top={-20} left={1500} rotate={-2} width={230}>
+          Les 4 artboards <b>C4</b> sont les étapes du même wizard. Cliquez en focus pour utiliser les boutons « Précédent »/« Suivant ».
+        </DCPostIt>
+      </DCSection>
+
+      {/* A. Administration */}
+      <DCSection id="A" title="Application Administration — admin.connect" subtitle="Back-office organisme · ici la DG État Civil · file demandes, instruction, dossier 360°, génération, correspondance, SAE">
+        <DCArtboard id="A1" label="A1 · Tableau de bord organisme" width={1440} height={1100}>
+          <AdminDashboard/>
+        </DCArtboard>
+        <DCArtboard id="A2" label="A2 · File des demandes citoyennes" width={1440} height={900}>
+          <AdminQueue/>
+        </DCArtboard>
+        <DCArtboard id="A3" label="A3 · Instruction d'une demande" width={1440} height={1100}>
+          <AdminInstruction/>
+        </DCArtboard>
+        <DCArtboard id="A4" label="A4 · Dossier citoyen 360°" width={1440} height={1100}>
+          <AdminCitizenFolder/>
+        </DCArtboard>
+        <DCArtboard id="A5" label="A5 · Génération automatique de document" width={1440} height={1100}>
+          <AdminGeneration/>
+        </DCArtboard>
+        <DCArtboard id="A6" label="A6 · Correspondance inter-administrations" width={1440} height={900}>
+          <AdminCorrespondence/>
+        </DCArtboard>
+        <DCArtboard id="A7" label="A7 · Archives SAE (brique conservée)" width={1440} height={950}>
+          <AdminArchives/>
+        </DCArtboard>
+        <DCArtboard id="A8" label="A8 · Catalogue des services proposés" width={1440} height={900}>
+          <AdminServices/>
+        </DCArtboard>
+        <DCArtboard id="A9" label="A9 · Annuaire inter-administrations" width={1440} height={950}>
+          <AdminDirectory/>
+        </DCArtboard>
+        <DCPostIt top={-30} left={2980} rotate={-3} width={240}>
+          La brique <b>SAE archives</b> du POC précédent est conservée comme l'une des fonctions de l'app Administration (écran A7).
+        </DCPostIt>
+      </DCSection>
+
+      {/* P. Plateforme */}
+      <DCSection id="P" title="Application Plateforme — console.connect" subtitle="Console super-admin Digitalium · vue cross-organismes, onboarding, statistiques d'impact">
+        <DCArtboard id="P1" label="P1 · Supervision multi-organismes" width={1440} height={1300}>
+          <PlatformSupervision/>
+        </DCArtboard>
+        <DCArtboard id="P2" label="P2 · Organisations enregistrées" width={1440} height={1000}>
+          <PlatformOrgs/>
+        </DCArtboard>
+        <DCArtboard id="P3" label="P3 · Onboarding d'une administration" width={1440} height={1050}>
+          <PlatformOnboarding/>
+        </DCArtboard>
+        <DCArtboard id="P4" label="P4 · Statistiques d'usage" width={1440} height={1200}>
+          <PlatformStats/>
+        </DCArtboard>
+      </DCSection>
+
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+
+</body>
+</html>

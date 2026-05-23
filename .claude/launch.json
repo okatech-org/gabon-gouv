@@ -1,0 +1,26 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "citizen-web",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "apps/citizen-web",
+      "port": 4000
+    },
+    {
+      "name": "admin-web",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "apps/admin-web",
+      "port": 4001
+    },
+    {
+      "name": "platform-web",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "apps/platform-web",
+      "port": 4002
+    }
+  ]
+}
