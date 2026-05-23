@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import { notFound, redirect } from "next/navigation"
 import {
   AppHeader,
   Badge,
@@ -11,8 +12,27 @@ import {
   Sidebar,
   Tabs,
 } from "@workspace/ui"
-import { getCurrentAdmin, getTemplateVariables } from "@workspace/mocks/admin"
+import { api } from "@workspace/backend/generated"
+import { getTemplateVariables } from "@workspace/mocks/admin"
 import { ADMIN_NAV } from "@/lib/admin-nav"
+import { convex } from "@/lib/convex"
+import { getCurrentAgent } from "@/lib/current-agent"
+import { agentRoleLabel } from "@/lib/format"
+
+interface InstructionForGenerationCitizen {
+  name: string
+  nip: string
+  email: string
+  birthDate: string
+  birthPlace: string
+  parents: string | null
+}
+
+interface InstructionForGeneration {
+  ref: string
+  service?: { title: string; slug: string }
+  citizen?: InstructionForGenerationCitizen
+}
 
 const Var = ({ children }: { children: ReactNode }) => (
   <span
@@ -33,16 +53,30 @@ export default async function AdminGenerationPage({
 }: {
   params: Promise<{ ref: string }>
 }) {
+  const session = await getCurrentAgent()
+  if (!session) redirect("/login")
+
   const { ref } = await params
-  void ref
-  const [admin, variables] = await Promise.all([
-    getCurrentAdmin(),
+  const [instruction, variables] = await Promise.all([
+    convex.query(api.admin.requests.getInstruction, {
+      token: session.token,
+      ref,
+    }) as Promise<InstructionForGeneration | null>,
     getTemplateVariables(),
   ])
 
+  if (!instruction) notFound()
+
+  const citizen = instruction.citizen
+  const serviceTitle = instruction.service?.title ?? "Acte"
+
   return (
     <Frame width={1440} height={1100}>
-      <AppHeader org={admin.org} user={admin.name} role={admin.role} />
+      <AppHeader
+        org={session.agent.organism?.shortName ?? session.agent.organism?.name}
+        user={session.agent.name}
+        role={agentRoleLabel(session.agent.role)}
+      />
       <div style={{ display: "flex" }}>
         <Sidebar items={ADMIN_NAV} current="documents" />
         <main style={{ flex: 1, overflow: "hidden" }}>
@@ -51,10 +85,10 @@ export default async function AdminGenerationPage({
               <a key="g" href="/" style={{ color: "inherit" }}>
                 Génération
               </a>,
-              "Acte de naissance",
+              serviceTitle,
             ]}
-            title="Générer un acte de naissance"
-            subtitle="Template officiel · pré-rempli depuis la demande GC-2026-EC-002841"
+            title={`Générer un ${serviceTitle.toLowerCase()}`}
+            subtitle={`Template officiel · pré-rempli depuis la demande ${instruction.ref}`}
             actions={
               <>
                 <Button variant="ghost" icon="save">
@@ -239,12 +273,14 @@ export default async function AdminGenerationPage({
                       Ministère de l&apos;Intérieur
                     </div>
                     <div style={{ fontSize: 11, color: "var(--ink-700)" }}>
-                      Direction Générale de l&apos;État Civil
+                      {session.agent.organism?.name ??
+                        "Direction Générale de l'État Civil"}
                     </div>
                   </div>
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontSize: 11, color: "var(--ink-600)" }}>
-                      Acte n° <b>EC-LBV-2026-04812</b>
+                      Réf.{" "}
+                      <b style={{ fontFamily: "var(--font-mono)" }}>{instruction.ref}</b>
                     </div>
                     <div style={{ fontSize: 11, color: "var(--ink-600)" }}>
                       Commune de <b>Libreville</b>
@@ -279,9 +315,8 @@ export default async function AdminGenerationPage({
                   </p>
                   <p>
                     est délivré par nos soins, officier d&apos;état civil de la commune de{" "}
-                    <Var>Libreville</Var>, le présent extrait conforme à l&apos;acte n°{" "}
-                    <Var>04812</Var> du registre des naissances de l&apos;année{" "}
-                    <Var>1992</Var>, rédigé comme suit :
+                    <Var>Libreville</Var>, le présent extrait conforme à l&apos;acte du
+                    registre des naissances, rédigé comme suit :
                   </p>
                   <div
                     style={{
@@ -292,11 +327,22 @@ export default async function AdminGenerationPage({
                       border: "1px dashed var(--ink-300)",
                     }}
                   >
-                    « Le <Var>quatorze mars mil neuf cent quatre-vingt-douze</Var>, à{" "}
-                    <Var>trois heures vingt-deux</Var>, est née à Libreville (Estuaire),{" "}
-                    <Var>OBAME Marie Estelle</Var>, de sexe <Var>féminin</Var>, fille de{" "}
-                    <Var>OBAME Jean-Pierre</Var>, instituteur, et de{" "}
-                    <Var>MBOUMBA Antoinette</Var>, sage-femme, son épouse… »
+                    {citizen ? (
+                      <>
+                        « Le <Var>{citizen.birthDate}</Var>, est né(e) à{" "}
+                        <Var>{citizen.birthPlace}</Var>, <Var>{citizen.name}</Var>
+                        {citizen.parents ? (
+                          <>
+                            {" "}
+                            de <Var>{citizen.parents}</Var>… »
+                          </>
+                        ) : (
+                          " »"
+                        )}
+                      </>
+                    ) : (
+                      "« Données du citoyen indisponibles. »"
+                    )}
                   </div>
                   <p style={{ marginTop: 16 }}>
                     Mentions marginales : <Var>Néant</Var>.

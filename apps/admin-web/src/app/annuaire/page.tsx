@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation"
 import {
   AppHeader,
   Avatar,
@@ -14,22 +15,86 @@ import {
   Th,
   Tr,
 } from "@workspace/ui"
-import { getAdminDirectory, getCurrentAdmin } from "@workspace/mocks/admin"
+import { api } from "@workspace/backend/generated"
 import { ADMIN_NAV } from "@/lib/admin-nav"
+import { convex } from "@/lib/convex"
+import { getCurrentAgent } from "@/lib/current-agent"
+import { agentRoleLabel } from "@/lib/format"
+
+interface DirectoryRow {
+  name: string
+  shortName?: string
+  category: string
+  tutelage?: string
+  province?: string
+  servicesCount: number
+  connection?: string
+  referent: string
+}
+
+function categoryLabel(c: string): string {
+  switch (c) {
+    case "direction_generale":
+      return "Direction générale"
+    case "ministere":
+      return "Ministère"
+    case "agence":
+      return "Agence"
+    case "etablissement_public":
+      return "Établissement public"
+    case "mairie":
+      return "Mairie"
+    case "prefecture":
+      return "Préfecture"
+    case "tribunal":
+      return "Tribunal"
+    case "caisse":
+      return "Caisse"
+    default:
+      return c
+  }
+}
+
+function connectionLabel(c?: string): string {
+  if (!c) return "—"
+  switch (c) {
+    case "api_sso":
+      return "API + SSO"
+    case "api":
+      return "API"
+    case "sso":
+      return "SSO"
+    case "manual":
+      return "Manuelle"
+    default:
+      return c
+  }
+}
 
 export default async function AdminDirectoryPage() {
-  const [admin, directory] = await Promise.all([getCurrentAdmin(), getAdminDirectory()])
+  const session = await getCurrentAgent()
+  if (!session) redirect("/login")
+
+  const directory = (await convex.query(api.admin.directory.list, {
+    token: session.token,
+  })) as DirectoryRow[]
+
+  const total = directory.length
 
   return (
     <Frame width={1440} height={950}>
-      <AppHeader org={admin.org} user={admin.name} role={admin.role} />
+      <AppHeader
+        org={session.agent.organism?.shortName ?? session.agent.organism?.name}
+        user={session.agent.name}
+        role={agentRoleLabel(session.agent.role)}
+      />
       <div style={{ display: "flex" }}>
         <Sidebar items={ADMIN_NAV} current="annuaire" />
         <main style={{ flex: 1, overflow: "hidden" }}>
           <PageHeader
             breadcrumbs={["Annuaire des administrations"]}
             title="Annuaire inter-administrations"
-            subtitle="47 administrations connectées · contacts officiels & circuits validés"
+            subtitle={`${total} administration${total > 1 ? "s" : ""} connectée${total > 1 ? "s" : ""} · contacts officiels & circuits validés`}
             actions={
               <>
                 <Button variant="outline" icon="download">
@@ -69,49 +134,54 @@ export default async function AdminDirectoryPage() {
                 </tr>
               </thead>
               <tbody>
-                {directory.map((o) => (
-                  <Tr key={o.name}>
-                    <Td>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <Icon
-                          name="building"
-                          size={16}
-                          style={{ color: "var(--primary-500)" }}
-                        />
-                        <span style={{ fontWeight: 600 }}>{o.name}</span>
-                      </div>
-                    </Td>
-                    <Td>{o.category}</Td>
-                    <Td style={{ color: "var(--ink-600)" }}>{o.tutelage}</Td>
-                    <Td>
-                      <Badge tone="primary" size="sm">
-                        {o.servicesCount} services
-                      </Badge>
-                    </Td>
-                    <Td>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <Avatar name={o.referent} tone="primary" size={22} />
-                        <span>{o.referent}</span>
-                      </div>
-                    </Td>
-                    <Td>
-                      {o.connection === "API + SSO" ? (
-                        <Badge tone="archived" size="sm" dot>
-                          {o.connection}
+                {directory.map((o) => {
+                  const connLabel = connectionLabel(o.connection)
+                  return (
+                    <Tr key={o.name}>
+                      <Td>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <Icon
+                            name="building"
+                            size={16}
+                            style={{ color: "var(--primary-500)" }}
+                          />
+                          <span style={{ fontWeight: 600 }}>
+                            {o.shortName ?? o.name}
+                          </span>
+                        </div>
+                      </Td>
+                      <Td>{categoryLabel(o.category)}</Td>
+                      <Td style={{ color: "var(--ink-600)" }}>{o.tutelage ?? "—"}</Td>
+                      <Td>
+                        <Badge tone="primary" size="sm">
+                          {o.servicesCount} services
                         </Badge>
-                      ) : (
-                        <Badge tone="neutral" size="sm" dot>
-                          {o.connection}
-                        </Badge>
-                      )}
-                    </Td>
-                    <Td>
-                      <Button variant="ghost" size="sm" iconRight="arrowRight">
-                        Contacter
-                      </Button>
-                    </Td>
-                  </Tr>
-                ))}
+                      </Td>
+                      <Td>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <Avatar name={o.referent} tone="primary" size={22} />
+                          <span>{o.referent}</span>
+                        </div>
+                      </Td>
+                      <Td>
+                        {connLabel === "API + SSO" ? (
+                          <Badge tone="archived" size="sm" dot>
+                            {connLabel}
+                          </Badge>
+                        ) : (
+                          <Badge tone="neutral" size="sm" dot>
+                            {connLabel}
+                          </Badge>
+                        )}
+                      </Td>
+                      <Td>
+                        <Button variant="ghost" size="sm" iconRight="arrowRight">
+                          Contacter
+                        </Button>
+                      </Td>
+                    </Tr>
+                  )
+                })}
               </tbody>
             </Table>
           </div>

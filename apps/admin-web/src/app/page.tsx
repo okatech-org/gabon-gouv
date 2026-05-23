@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation"
 import {
   Alert,
   AppHeader,
@@ -20,36 +21,95 @@ import {
   Th,
   Tr,
 } from "@workspace/ui"
-import {
-  getAdminAssignedRequests,
-  getAdminDashboardKpis,
-  getAdminDistribution,
-  getAdminTeamActivity,
-  getAdminVolume30Days,
-  getCurrentAdmin,
-} from "@workspace/mocks/admin"
+import { api } from "@workspace/backend/generated"
 import { ADMIN_NAV } from "@/lib/admin-nav"
+import { convex } from "@/lib/convex"
+import { getCurrentAgent } from "@/lib/current-agent"
+import {
+  agentRoleLabel,
+  isUrgentDue,
+  relativeTime,
+  shortDateTime,
+  statusBadge,
+} from "@/lib/format"
+
+interface DashboardKpi {
+  label: string
+  value: string
+  icon: string
+  hint?: string
+}
+
+interface AssignedRequest {
+  ref: string
+  title: string
+  citizen: string
+  status: string
+  statusKey: string
+  dueAt?: number
+  depositedAt: number
+  progressPct: number
+}
+
+interface DashboardData {
+  kpis: DashboardKpi[]
+  assigned: AssignedRequest[]
+}
+
+// TODO: placeholder — pas encore de query Convex pour ces données.
+const VOLUME_LAST_30_DAYS = [
+  42, 58, 51, 73, 64, 88, 79, 92, 71, 84, 96, 81, 103, 94, 88, 112, 106, 98, 124, 117, 109,
+  134, 128, 119, 142, 138, 126, 151, 146, 148,
+]
+
+// TODO: placeholder — pas encore de query Convex pour la répartition par type.
+const DISTRIBUTION = [
+  { title: "Acte de naissance", count: 142, pct: 48, color: "var(--primary-500)" },
+  { title: "Acte de mariage", count: 68, pct: 23, color: "var(--success-500)" },
+  { title: "Certificat de nationalité", count: 52, pct: 17, color: "var(--warning-500)" },
+  { title: "Acte de décès", count: 26, pct: 9, color: "var(--ink-500)" },
+  { title: "Autres", count: 10, pct: 3, color: "var(--ink-300)" },
+]
+
+// TODO: placeholder — pas encore de query Convex pour l'activité équipe.
+const TEAM_ACTIVITY = [
+  { who: "P. MOUSSAVOU", action: "a signé", what: "Acte EC-LBV-2026-04812", when: "il y a 12 min" },
+  { who: "C. NDONG", action: "a versé", what: "32 actes au SAE", when: "il y a 1 h" },
+  { who: "L. EYEGHE", action: "a transféré", what: "Dossier #4812 à DGI", when: "il y a 3 h" },
+  { who: "Système", action: "a généré", what: "14 certificats automatiques", when: "il y a 5 h" },
+]
 
 export default async function AdminDashboardPage() {
-  const [admin, kpis, volume, distribution, assigned, activity] = await Promise.all([
-    getCurrentAdmin(),
-    getAdminDashboardKpis(),
-    getAdminVolume30Days(),
-    getAdminDistribution(),
-    getAdminAssignedRequests(),
-    getAdminTeamActivity(),
-  ])
+  const session = await getCurrentAgent()
+  if (!session) redirect("/login")
+
+  const dashboard = (await convex.query(api.admin.dashboard.getDashboard, {
+    token: session.token,
+  })) as DashboardData
+
+  const firstName = session.agent.name.split(" ")[0]
+  const queuedKpi = dashboard.kpis.find((k) => k.label === "En file d'attente")?.value ?? "—"
+  const inProgressKpi =
+    dashboard.kpis.find((k) => k.label === "En cours")?.value ?? "—"
+  const assignedCount = dashboard.assigned.length
 
   return (
     <Frame width={1440} height={1100}>
-      <AppHeader org={admin.org} user={admin.name} role={admin.role} />
+      <AppHeader
+        org={session.agent.organism?.shortName ?? session.agent.organism?.name}
+        user={session.agent.name}
+        role={agentRoleLabel(session.agent.role)}
+      />
       <div style={{ display: "flex", minHeight: "calc(1100px - 63px)" }}>
         <Sidebar items={ADMIN_NAV} current="home" />
         <main style={{ flex: 1, overflow: "hidden" }}>
           <PageHeader
-            breadcrumbs={["DG État Civil", "Tableau de bord"]}
-            title="Bonjour Yolande 👋"
-            subtitle="47 demandes en file d'attente · 12 vous sont assignées · 3 en retard."
+            breadcrumbs={[
+              session.agent.organism?.shortName ?? "Organisme",
+              "Tableau de bord",
+            ]}
+            title={`Bonjour ${firstName} 👋`}
+            subtitle={`${queuedKpi} demande${Number(queuedKpi) > 1 ? "s" : ""} en file d'attente · ${assignedCount} vous ${assignedCount > 1 ? "sont" : "est"} assignée${assignedCount > 1 ? "s" : ""} · ${inProgressKpi} en cours.`}
             actions={
               <>
                 <Button variant="secondary" icon="download">
@@ -62,14 +122,12 @@ export default async function AdminDashboardPage() {
           <div style={{ padding: "24px 32px", display: "flex", flexDirection: "column", gap: 24 }}>
             {/* KPI top */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12 }}>
-              {kpis.map((k) => (
+              {dashboard.kpis.map((k) => (
                 <StatCard
                   key={k.label}
                   label={k.label}
                   value={k.value}
                   icon={k.icon as IconName}
-                  delta={k.delta}
-                  deltaTone={k.deltaTone}
                   hint={k.hint}
                 />
               ))}
@@ -92,7 +150,7 @@ export default async function AdminDashboardPage() {
                     />
                   }
                 />
-                <Sparkline values={volume} width={760} height={160} />
+                <Sparkline values={VOLUME_LAST_30_DAYS} width={760} height={160} />
                 <div
                   style={{
                     display: "flex",
@@ -111,7 +169,7 @@ export default async function AdminDashboardPage() {
               </Card>
               <Card>
                 <SectionHeading title="Répartition par type" level={3} />
-                {distribution.map((r) => (
+                {DISTRIBUTION.map((r) => (
                   <div key={r.title} style={{ marginTop: 8 }}>
                     <div
                       style={{
@@ -160,8 +218,8 @@ export default async function AdminDashboardPage() {
                   <div style={{ display: "flex", gap: 8 }}>
                     <Tabs
                       tabs={[
-                        { id: "a", label: "À traiter (12)" },
-                        { id: "b", label: "En attente citoyen (4)" },
+                        { id: "a", label: `À traiter (${assignedCount})` },
+                        { id: "b", label: "En attente citoyen" },
                         { id: "c", label: "Terminées" },
                       ]}
                       current="a"
@@ -186,50 +244,62 @@ export default async function AdminDashboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {assigned.map((r) => (
-                    <Tr key={r.ref}>
-                      <Td>
-                        <Checkbox checked={false} id={r.ref} />
-                      </Td>
-                      <Td style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>
-                        <a
-                          href={`/demandes/${r.ref}`}
-                          style={{ color: "inherit", textDecoration: "none" }}
-                        >
-                          {r.ref}
-                        </a>
-                      </Td>
-                      <Td style={{ fontWeight: 600 }}>{r.title}</Td>
-                      <Td>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <Avatar name={r.citizen} tone="green" size={24} />
-                          <span>{r.citizen}</span>
-                        </div>
-                      </Td>
-                      <Td style={{ color: "var(--ink-600)" }}>{r.depositedAt}</Td>
-                      <Td>
-                        {r.urgent ? (
-                          <Badge tone="danger" size="sm" dot>
-                            {r.dueAt}
+                  {dashboard.assigned.map((r) => {
+                    const status = statusBadge(r.statusKey)
+                    const urgent = isUrgentDue(r.dueAt)
+                    return (
+                      <Tr key={r.ref}>
+                        <Td>
+                          <Checkbox checked={false} id={r.ref} />
+                        </Td>
+                        <Td style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>
+                          <a
+                            href={`/demandes/${r.ref}`}
+                            style={{ color: "inherit", textDecoration: "none" }}
+                          >
+                            {r.ref}
+                          </a>
+                        </Td>
+                        <Td style={{ fontWeight: 600 }}>{r.title}</Td>
+                        <Td>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <Avatar name={r.citizen} tone="green" size={24} />
+                            <span>{r.citizen}</span>
+                          </div>
+                        </Td>
+                        <Td style={{ color: "var(--ink-600)" }}>
+                          {shortDateTime(r.depositedAt)}
+                        </Td>
+                        <Td>
+                          {r.dueAt ? (
+                            urgent ? (
+                              <Badge tone="danger" size="sm" dot>
+                                {relativeTime(r.dueAt)}
+                              </Badge>
+                            ) : (
+                              <span style={{ color: "var(--ink-700)" }}>
+                                {relativeTime(r.dueAt)}
+                              </span>
+                            )
+                          ) : (
+                            <span style={{ color: "var(--ink-400)" }}>—</span>
+                          )}
+                        </Td>
+                        <Td>
+                          <Badge tone={status.tone} dot>
+                            {status.label}
                           </Badge>
-                        ) : (
-                          <span style={{ color: "var(--ink-700)" }}>{r.dueAt}</span>
-                        )}
-                      </Td>
-                      <Td>
-                        <Badge tone={r.tone} dot>
-                          {r.status}
-                        </Badge>
-                      </Td>
-                      <Td>
-                        <Icon
-                          name="chevronRight"
-                          size={16}
-                          style={{ color: "var(--ink-400)" }}
-                        />
-                      </Td>
-                    </Tr>
-                  ))}
+                        </Td>
+                        <Td>
+                          <Icon
+                            name="chevronRight"
+                            size={16}
+                            style={{ color: "var(--ink-400)" }}
+                          />
+                        </Td>
+                      </Tr>
+                    )
+                  })}
                 </tbody>
               </Table>
             </Card>
@@ -237,8 +307,9 @@ export default async function AdminDashboardPage() {
             {/* Alerts row */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
               <Card>
-                <SectionHeading title="Activité de l'équipe" level={3} />
-                {activity.map((a, i) => (
+                <SectionHeading title="Activité de l&apos;équipe" level={3} />
+                {/* TODO: placeholder — pas encore de query Convex pour l'activité équipe. */}
+                {TEAM_ACTIVITY.map((a, i) => (
                   <div
                     key={`${a.who}-${i}`}
                     style={{
@@ -247,7 +318,7 @@ export default async function AdminDashboardPage() {
                       gap: 10,
                       padding: "10px 0",
                       borderBottom:
-                        i === activity.length - 1 ? "none" : "1px solid var(--ink-150)",
+                        i === TEAM_ACTIVITY.length - 1 ? "none" : "1px solid var(--ink-150)",
                     }}
                   >
                     <Avatar

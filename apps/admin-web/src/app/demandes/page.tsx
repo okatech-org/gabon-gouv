@@ -21,7 +21,13 @@ import { api } from "@workspace/backend/generated"
 import { ADMIN_NAV } from "@/lib/admin-nav"
 import { convex } from "@/lib/convex"
 import { getCurrentAgent } from "@/lib/current-agent"
-import { isUrgentDue, relativeTime, shortDateTime, statusBadge } from "@/lib/format"
+import {
+  agentRoleLabel,
+  isUrgentDue,
+  relativeTime,
+  shortDateTime,
+  statusBadge,
+} from "@/lib/format"
 
 interface QueueRow {
   ref: string
@@ -247,19 +253,3 @@ export default async function AdminQueuePage() {
   )
 }
 
-function agentRoleLabel(role: string): string {
-  switch (role) {
-    case "agent_instructeur":
-      return "Agent instructeur"
-    case "chef_service":
-      return "Chef de service"
-    case "officier_signataire":
-      return "Officier signataire"
-    case "admin_organisme":
-      return "Admin organisme"
-    case "admin_technique":
-      return "Admin technique"
-    default:
-      return role
-  }
-}

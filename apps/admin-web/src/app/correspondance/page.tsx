@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation"
 import {
   AppHeader,
   Avatar,
@@ -10,18 +11,104 @@ import {
   TextArea,
   TextInput,
 } from "@workspace/ui"
-import { getCorrespondences, getCurrentAdmin } from "@workspace/mocks/admin"
+import { api } from "@workspace/backend/generated"
 import { ADMIN_NAV } from "@/lib/admin-nav"
+import { convex } from "@/lib/convex"
+import { getCurrentAgent } from "@/lib/current-agent"
+import {
+  agentRoleLabel,
+  relativeTime,
+  shortDateTime,
+} from "@/lib/format"
+
+interface InboxItem {
+  ref: string
+  from: string
+  subject: string
+  sentAt: number
+  urgent: boolean
+  confidentiality: string
+  unread: boolean
+  attachmentCount: number
+}
+
+interface ThreadMessage {
+  fromAgentName: string
+  fromOrganism: string
+  body: string
+  signed: boolean
+  sentAt: number
+}
+
+interface ThreadData {
+  ref: string
+  subject: string
+  sentAt: number
+  dueAt?: number
+  urgent: boolean
+  confidentiality: string
+  archivePolicy: string
+  from: string
+  to: string
+  messages: ThreadMessage[]
+  linkedCitizen?: { name: string; nip: string } | null
+  linkedRequest?: { ref: string; status: string } | null
+}
+
+function confidentialityLabel(c: string): string {
+  switch (c) {
+    case "restricted":
+      return "Restreint"
+    case "confidential":
+      return "Confidentiel"
+    case "public":
+      return "Public"
+    default:
+      return c
+  }
+}
+
+function archiveLabel(p: string): string {
+  switch (p) {
+    case "2y":
+      return "2 ans"
+    case "5y":
+      return "5 ans"
+    case "10y":
+      return "10 ans"
+    case "indef":
+      return "Indéfini"
+    default:
+      return p
+  }
+}
 
 export default async function AdminCorrespondencePage() {
-  const [admin, correspondences] = await Promise.all([
-    getCurrentAdmin(),
-    getCorrespondences(),
-  ])
+  const session = await getCurrentAgent()
+  if (!session) redirect("/login")
+
+  const inbox = (await convex.query(api.admin.correspondence.listInbox, {
+    token: session.token,
+  })) as InboxItem[]
+
+  // Conversation par défaut affichée : la première (ou CR-2026-1842 si présente).
+  const activeRef =
+    inbox.find((i) => i.ref === "CR-2026-1842")?.ref ?? inbox[0]?.ref ?? "CR-2026-1842"
+
+  const thread = (await convex.query(api.admin.correspondence.getThread, {
+    token: session.token,
+    ref: activeRef,
+  })) as ThreadData | null
+
+  const unreadCount = inbox.filter((i) => i.unread).length
 
   return (
     <Frame width={1440} height={900}>
-      <AppHeader org={admin.org} user={admin.name} role={admin.role} />
+      <AppHeader
+        org={session.agent.organism?.shortName ?? session.agent.organism?.name}
+        user={session.agent.name}
+        role={agentRoleLabel(session.agent.role)}
+      />
       <div style={{ display: "flex" }}>
         <Sidebar items={ADMIN_NAV} current="correspondance" />
         <main
@@ -35,7 +122,7 @@ export default async function AdminCorrespondencePage() {
           <PageHeader
             breadcrumbs={["Correspondance inter-administrations"]}
             title="Messagerie sécurisée inter-admin"
-            subtitle="Échanges officiels entre la DG État Civil et les autres administrations gabonaises."
+            subtitle={`Échanges officiels entre ${session.agent.organism?.shortName ?? "votre organisme"} et les autres administrations gabonaises.`}
             actions={
               <>
                 <Button variant="outline" icon="filter">
@@ -66,7 +153,7 @@ export default async function AdminCorrespondencePage() {
                   borderBottom: "1px solid var(--ink-150)",
                 }}
               >
-                {["Reçus (12)", "Envoyés", "Brouillons"].map((t, i) => (
+                {[`Reçus (${inbox.length})`, "Envoyés", "Brouillons"].map((t, i) => (
                   <button
                     key={t}
                     style={{
@@ -84,100 +171,104 @@ export default async function AdminCorrespondencePage() {
                   </button>
                 ))}
               </div>
-              {correspondences.map((m, i) => (
-                <div
-                  key={m.ref}
-                  style={{
-                    padding: "12px 14px",
-                    borderBottom: "1px solid var(--ink-150)",
-                    background:
-                      i === 0
+              {inbox.map((m) => {
+                const isActive = m.ref === activeRef
+                return (
+                  <div
+                    key={m.ref}
+                    style={{
+                      padding: "12px 14px",
+                      borderBottom: "1px solid var(--ink-150)",
+                      background: isActive
                         ? "var(--primary-50)"
                         : m.unread
                           ? "white"
                           : "var(--ink-50)",
-                    cursor: "pointer",
-                    display: "flex",
-                    gap: 10,
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: "50%",
-                      background: m.unread ? "var(--primary-500)" : "transparent",
-                      marginTop: 8,
-                      flexShrink: 0,
+                      cursor: "pointer",
+                      display: "flex",
+                      gap: 10,
                     }}
-                  />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div
+                  >
+                    <span
                       style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
+                        width: 6,
+                        height: 6,
+                        borderRadius: "50%",
+                        background: m.unread ? "var(--primary-500)" : "transparent",
+                        marginTop: 8,
+                        flexShrink: 0,
                       }}
-                    >
-                      <span
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: 13,
+                            fontWeight: m.unread ? 700 : 600,
+                            color: "var(--ink-900)",
+                          }}
+                        >
+                          {m.from}
+                        </span>
+                        <span style={{ fontSize: 11, color: "var(--ink-500)" }}>
+                          {relativeTime(m.sentAt)}
+                        </span>
+                      </div>
+                      <div
                         style={{
                           fontSize: 13,
-                          fontWeight: m.unread ? 700 : 600,
-                          color: "var(--ink-900)",
+                          color: "var(--ink-800)",
+                          marginTop: 2,
+                          whiteSpace: "nowrap",
+                          textOverflow: "ellipsis",
+                          overflow: "hidden",
                         }}
                       >
-                        {m.from}
-                      </span>
-                      <span style={{ fontSize: 11, color: "var(--ink-500)" }}>{m.when}</span>
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 13,
-                        color: "var(--ink-800)",
-                        marginTop: 2,
-                        whiteSpace: "nowrap",
-                        textOverflow: "ellipsis",
-                        overflow: "hidden",
-                      }}
-                    >
-                      {m.subject}
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
-                        marginTop: 4,
-                      }}
-                    >
-                      <span
+                        {m.subject}
+                      </div>
+                      <div
                         style={{
-                          fontFamily: "var(--font-mono)",
-                          fontSize: 10.5,
-                          color: "var(--ink-500)",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                          marginTop: 4,
                         }}
                       >
-                        {m.ref}
-                      </span>
-                      {m.urgent && (
-                        <Badge tone="danger" size="sm">
-                          Urgent
-                        </Badge>
-                      )}
-                      {m.attachments > 0 && (
-                        <span style={{ fontSize: 11, color: "var(--ink-600)" }}>
-                          <Icon
-                            name="paperclip"
-                            size={11}
-                            style={{ verticalAlign: "middle" }}
-                          />{" "}
-                          {m.attachments}
+                        <span
+                          style={{
+                            fontFamily: "var(--font-mono)",
+                            fontSize: 10.5,
+                            color: "var(--ink-500)",
+                          }}
+                        >
+                          {m.ref}
                         </span>
-                      )}
+                        {m.urgent && (
+                          <Badge tone="danger" size="sm">
+                            Urgent
+                          </Badge>
+                        )}
+                        {m.attachmentCount > 0 && (
+                          <span style={{ fontSize: 11, color: "var(--ink-600)" }}>
+                            <Icon
+                              name="paperclip"
+                              size={11}
+                              style={{ verticalAlign: "middle" }}
+                            />{" "}
+                            {m.attachmentCount}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
 
             {/* Conversation */}
@@ -204,7 +295,7 @@ export default async function AdminCorrespondencePage() {
                 >
                   <div>
                     <h2 style={{ fontSize: 17 }}>
-                      Demande d&apos;authentification d&apos;acte de naissance · OBAME Marie
+                      {thread?.subject ?? "Aucun courrier sélectionné"}
                     </h2>
                     <div
                       style={{
@@ -216,11 +307,22 @@ export default async function AdminCorrespondencePage() {
                         color: "var(--ink-600)",
                       }}
                     >
-                      <span style={{ fontFamily: "var(--font-mono)" }}>CR-2026-1842</span>
-                      <Badge tone="danger" size="sm">
-                        Urgent · délai 24 h
-                      </Badge>
-                      <span>3 participants</span>
+                      {thread && (
+                        <>
+                          <span style={{ fontFamily: "var(--font-mono)" }}>
+                            {thread.ref}
+                          </span>
+                          {thread.urgent && (
+                            <Badge tone="danger" size="sm">
+                              Urgent
+                              {thread.dueAt
+                                ? ` · ${relativeTime(thread.dueAt)}`
+                                : ""}
+                            </Badge>
+                          )}
+                          <span>{thread.messages.length} message{thread.messages.length > 1 ? "s" : ""}</span>
+                        </>
+                      )}
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 6 }}>
@@ -245,120 +347,97 @@ export default async function AdminCorrespondencePage() {
                   background: "var(--ink-50)",
                 }}
               >
-                {/* Message 1 */}
-                <div
-                  style={{
-                    background: "white",
-                    border: "1px solid var(--ink-200)",
-                    borderRadius: 8,
-                    padding: 18,
-                    marginBottom: 14,
-                  }}
-                >
+                {thread?.messages.map((msg, i) => (
                   <div
+                    key={`${msg.sentAt}-${i}`}
                     style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                      marginBottom: 10,
+                      background: "white",
+                      border: "1px solid var(--ink-200)",
+                      borderRadius: 8,
+                      padding: 18,
+                      marginBottom: 14,
                     }}
                   >
-                    <Avatar name="DG Documentation" tone="primary" size={32} />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700 }}>
-                        DG Documentation · Capt. Faustin MBOUMBA
-                      </div>
-                      <div style={{ fontSize: 11.5, color: "var(--ink-600)" }}>
-                        Pour : DG État Civil · 20 mai 2026 · 11:42
-                      </div>
-                    </div>
-                    <Badge tone="archived" size="sm" icon="shieldCheck">
-                      Signé S/MIME
-                    </Badge>
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 14,
-                      color: "var(--ink-800)",
-                      lineHeight: 1.65,
-                    }}
-                  >
-                    <p>Madame, Monsieur,</p>
-                    <p style={{ marginTop: 8 }}>
-                      Dans le cadre de l&apos;instruction d&apos;une demande de
-                      renouvellement de passeport biométrique (réf.{" "}
-                      <b>GC-2026-DI-019733</b>) déposée par <b>Mme Marie Estelle OBAME</b>,
-                      NIP <b>184 12 76 005 042</b>, nous vous prions de bien vouloir
-                      authentifier l&apos;acte de naissance présenté.
-                    </p>
-                    <p style={{ marginTop: 8 }}>
-                      Acte présenté : <b>EC-LBV-1992-04812</b>, registre de Libreville,
-                      année 1992.
-                    </p>
-                    <p style={{ marginTop: 8 }}>
-                      Compte tenu du délai de traitement de la demande citoyenne, nous vous
-                      saurions gré d&apos;une réponse sous 24 heures.
-                    </p>
-                    <p style={{ marginTop: 8 }}>Cordialement,</p>
-                  </div>
-                  <div
-                    style={{
-                      marginTop: 12,
-                      paddingTop: 12,
-                      borderTop: "1px solid var(--ink-150)",
-                      display: "flex",
-                      gap: 8,
-                    }}
-                  >
-                    <Badge tone="neutral" size="sm" icon="paperclip">
-                      demande-passeport-019733.pdf · 340 Ko
-                    </Badge>
-                  </div>
-                </div>
-
-                {/* Quick reply suggestion */}
-                <div
-                  style={{
-                    background: "var(--info-50)",
-                    border: "1px dashed var(--primary-300)",
-                    borderRadius: 8,
-                    padding: 14,
-                    marginBottom: 14,
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <Icon name="cpu" size={14} style={{ color: "var(--primary-500)" }} />
-                    <span
+                    <div
                       style={{
-                        fontSize: 12,
-                        fontWeight: 700,
-                        color: "var(--primary-700)",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        marginBottom: 10,
                       }}
                     >
-                      Réponse suggérée par Gabon Connect
-                    </span>
+                      <Avatar name={msg.fromOrganism} tone="primary" size={32} />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700 }}>
+                          {msg.fromOrganism} · {msg.fromAgentName}
+                        </div>
+                        <div style={{ fontSize: 11.5, color: "var(--ink-600)" }}>
+                          Pour : {thread.to} · {shortDateTime(msg.sentAt)}
+                        </div>
+                      </div>
+                      {msg.signed && (
+                        <Badge tone="archived" size="sm" icon="shieldCheck">
+                          Signé S/MIME
+                        </Badge>
+                      )}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 14,
+                        color: "var(--ink-800)",
+                        lineHeight: 1.65,
+                        whiteSpace: "pre-wrap",
+                      }}
+                    >
+                      {msg.body}
+                    </div>
                   </div>
-                  <p
+                ))}
+
+                {thread && (
+                  <div
                     style={{
-                      fontSize: 13,
-                      color: "var(--ink-700)",
-                      marginTop: 8,
-                      lineHeight: 1.55,
+                      background: "var(--info-50)",
+                      border: "1px dashed var(--primary-300)",
+                      borderRadius: 8,
+                      padding: 14,
+                      marginBottom: 14,
                     }}
                   >
-                    L&apos;acte <b>EC-LBV-1992-04812</b> est conforme au registre. Nous
-                    confirmons l&apos;authenticité du document. Aucune mention marginale
-                    n&apos;a été constatée à ce jour.
-                  </p>
-                  <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                    <Button size="sm" icon="check">
-                      Utiliser cette réponse
-                    </Button>
-                    <Button variant="ghost" size="sm">
-                      Éditer
-                    </Button>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <Icon name="cpu" size={14} style={{ color: "var(--primary-500)" }} />
+                      <span
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 700,
+                          color: "var(--primary-700)",
+                        }}
+                      >
+                        Réponse suggérée par Gabon Connect
+                      </span>
+                    </div>
+                    <p
+                      style={{
+                        fontSize: 13,
+                        color: "var(--ink-700)",
+                        marginTop: 8,
+                        lineHeight: 1.55,
+                      }}
+                    >
+                      L&apos;acte référencé dans votre demande est conforme au registre.
+                      Nous confirmons l&apos;authenticité du document. Aucune mention
+                      marginale n&apos;a été constatée à ce jour.
+                    </p>
+                    <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                      <Button size="sm" icon="check">
+                        Utiliser cette réponse
+                      </Button>
+                      <Button variant="ghost" size="sm">
+                        Éditer
+                      </Button>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
               {/* Composer */}
@@ -419,6 +498,7 @@ export default async function AdminCorrespondencePage() {
               >
                 Circuit de validation
               </div>
+              {/* TODO: placeholder — pas encore de query Convex pour le circuit de validation. */}
               {[
                 { who: "Y. NGUEMA", role: "Agent instructeur", st: "done" as const },
                 { who: "C. NDONG", role: "Chef de service", st: "active" as const },
@@ -489,80 +569,107 @@ export default async function AdminCorrespondencePage() {
                   margin: "6px 0 14px",
                 }}
               />
-              <div
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: "var(--ink-500)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.06em",
-                  marginBottom: 10,
-                }}
-              >
-                Dossier rattaché
-              </div>
-              <a
-                href="/dossiers/184127600504"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: 10,
-                  background: "var(--ink-50)",
-                  borderRadius: 6,
-                  textDecoration: "none",
-                  color: "inherit",
-                }}
-              >
-                <Icon name="folder" size={16} style={{ color: "var(--ink-500)" }} />
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>Marie Estelle OBAME</div>
-                  <div style={{ fontSize: 11, color: "var(--ink-600)" }}>
-                    3 demandes · 14 documents
+              {thread?.linkedCitizen && (
+                <>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: "var(--ink-500)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.06em",
+                      marginBottom: 10,
+                    }}
+                  >
+                    Dossier rattaché
                   </div>
+                  <a
+                    href={`/dossiers/${thread.linkedCitizen.nip.replace(/\s/g, "")}`}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      padding: 10,
+                      background: "var(--ink-50)",
+                      borderRadius: 6,
+                      textDecoration: "none",
+                      color: "inherit",
+                    }}
+                  >
+                    <Icon name="folder" size={16} style={{ color: "var(--ink-500)" }} />
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>
+                        {thread.linkedCitizen.name}
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--ink-600)" }}>
+                        NIP{" "}
+                        <span style={{ fontFamily: "var(--font-mono)" }}>
+                          {thread.linkedCitizen.nip}
+                        </span>
+                      </div>
+                    </div>
+                  </a>
+                  <div style={{ height: 14 }} />
+                </>
+              )}
+              {thread && (
+                <>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: "var(--ink-500)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.06em",
+                      marginBottom: 10,
+                    }}
+                  >
+                    Métadonnées
+                  </div>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "8px 12px",
+                      fontSize: 12,
+                    }}
+                  >
+                    <span style={{ color: "var(--ink-500)" }}>Référence</span>
+                    <span
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {thread.ref}
+                    </span>
+                    <span style={{ color: "var(--ink-500)" }}>Confidentialité</span>
+                    <Badge tone="warning" size="sm">
+                      {confidentialityLabel(thread.confidentiality)}
+                    </Badge>
+                    <span style={{ color: "var(--ink-500)" }}>Échéance</span>
+                    <span style={{ fontWeight: 600 }}>
+                      {thread.dueAt ? shortDateTime(thread.dueAt) : "—"}
+                    </span>
+                    <span style={{ color: "var(--ink-500)" }}>Archivage</span>
+                    <Badge tone="active" size="sm" dot>
+                      {archiveLabel(thread.archivePolicy)}
+                    </Badge>
+                  </div>
+                </>
+              )}
+              {!thread && (
+                <div style={{ fontSize: 12, color: "var(--ink-500)" }}>
+                  Sélectionnez un courrier pour voir ses métadonnées.
                 </div>
-              </a>
-              <div style={{ height: 14 }} />
-              <div
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: "var(--ink-500)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.06em",
-                  marginBottom: 10,
-                }}
-              >
-                Métadonnées
-              </div>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "8px 12px",
-                  fontSize: 12,
-                }}
-              >
-                <span style={{ color: "var(--ink-500)" }}>Référence</span>
-                <span
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontWeight: 600,
-                  }}
-                >
-                  CR-2026-1842
-                </span>
-                <span style={{ color: "var(--ink-500)" }}>Confidentialité</span>
-                <Badge tone="warning" size="sm">
-                  Restreint
-                </Badge>
-                <span style={{ color: "var(--ink-500)" }}>Échéance</span>
-                <span style={{ fontWeight: 600 }}>21/05 11:42</span>
-                <span style={{ color: "var(--ink-500)" }}>Archivage</span>
-                <Badge tone="active" size="sm" dot>
-                  2 ans
-                </Badge>
-              </div>
+              )}
+              <div style={{ height: 10 }} />
+              {unreadCount > 0 && (
+                <div style={{ fontSize: 11, color: "var(--ink-500)" }}>
+                  {unreadCount} courrier{unreadCount > 1 ? "s" : ""} non lu
+                  {unreadCount > 1 ? "s" : ""}.
+                </div>
+              )}
             </aside>
           </div>
         </main>

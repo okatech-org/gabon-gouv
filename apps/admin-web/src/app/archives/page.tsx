@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation"
+import type { Tone } from "@workspace/ui"
 import {
   AppHeader,
   Badge,
@@ -17,32 +19,108 @@ import {
   Th,
   Tr,
 } from "@workspace/ui"
-import {
-  getArchives,
-  getCompliance,
-  getCurrentAdmin,
-  getEliminationLots,
-} from "@workspace/mocks/admin"
+import { api } from "@workspace/backend/generated"
 import { ADMIN_NAV } from "@/lib/admin-nav"
+import { convex } from "@/lib/convex"
+import { getCurrentAgent } from "@/lib/current-agent"
+import { agentRoleLabel, longDate } from "@/lib/format"
+
+interface ArchiveRow {
+  cote: string
+  description: string
+  versedAt: number
+  dua: string
+  status: string
+  finalSort: string
+  sha256: string
+}
+
+interface ArchiveStats {
+  versedThisMonth: number
+  total: number
+  pendingDestruction: number
+  integrityPct: number
+}
+
+function archiveStatusBadge(status: string): { label: string; tone: Tone } {
+  switch (status) {
+    case "active":
+      return { label: "Actif", tone: "active" }
+    case "semi_active":
+      return { label: "Semi-actif", tone: "semi" }
+    case "scheduled_destruction":
+      return { label: "Élim. planifiée", tone: "warning" }
+    case "destroyed":
+      return { label: "Détruit", tone: "neutral" }
+    case "permanent":
+      return { label: "Conservation déf.", tone: "archived" }
+    default:
+      return { label: status, tone: "neutral" }
+  }
+}
+
+function shortHash(sha: string): string {
+  if (sha.length <= 12) return sha
+  return `${sha.slice(0, 6)}…${sha.slice(-4)}`
+}
+
+// TODO: migrer compliance & elimination vers Convex.
+const COMPLIANCE = [
+  {
+    title: "Empreintes SHA-256",
+    description: "Recalculées toutes les 24h.",
+  },
+  {
+    title: "Journal d'événements scellé",
+    description: "186 472 lignes · scellement quotidien.",
+  },
+  {
+    title: "Réplication géographique",
+    description: "Owendo (primaire) + Mvengue (secours).",
+  },
+  {
+    title: "Audit annuel BSI",
+    description: "Prochaine échéance : nov. 2026.",
+  },
+]
+
+const ELIMINATION_LOTS = [
+  { title: "Casiers judiciaires expirés (T1 2026)", count: 142, sort: "Destruction physique" },
+  { title: "Demandes passeport non abouties", count: 84, sort: "Destruction logique" },
+  { title: "Brouillons d'actes annulés", count: 124, sort: "Destruction logique" },
+  { title: "Notifications expirées > 90 j", count: 62, sort: "Destruction logique" },
+]
 
 export default async function AdminArchivesPage() {
-  const [admin, archives, compliance, lots] = await Promise.all([
-    getCurrentAdmin(),
-    getArchives(),
-    getCompliance(),
-    getEliminationLots(),
+  const session = await getCurrentAgent()
+  if (!session) redirect("/login")
+
+  const [archives, stats] = await Promise.all([
+    convex.query(api.admin.archives.list, { token: session.token }) as Promise<
+      ArchiveRow[]
+    >,
+    convex.query(api.admin.archives.stats, { token: session.token }) as Promise<
+      ArchiveStats
+    >,
   ])
+
+  const producerLabel =
+    session.agent.organism?.shortName ?? session.agent.organism?.name ?? "—"
 
   return (
     <Frame width={1440} height={950}>
-      <AppHeader org={admin.org} user={admin.name} role={admin.role} />
+      <AppHeader
+        org={session.agent.organism?.shortName ?? session.agent.organism?.name}
+        user={session.agent.name}
+        role={agentRoleLabel(session.agent.role)}
+      />
       <div style={{ display: "flex" }}>
         <Sidebar items={ADMIN_NAV} current="archives" />
         <main style={{ flex: 1, overflow: "hidden" }}>
           <PageHeader
             breadcrumbs={["Archives (SAE)"]}
             title="Archives à valeur probante"
-            subtitle="Système d'Archivage Électronique conforme NF Z42-013 · 142 318 unités d'archives"
+            subtitle={`Système d'Archivage Électronique conforme NF Z42-013 · ${stats.total.toLocaleString("fr-FR")} unités d'archives`}
             meta={
               <>
                 <Badge tone="archived" dot icon="shieldCheck">
@@ -84,21 +162,23 @@ export default async function AdminArchivesPage() {
             >
               <StatCard
                 label="Versés ce mois"
-                value="3 184"
+                value={stats.versedThisMonth.toLocaleString("fr-FR")}
                 icon="upload"
-                delta="+18 %"
-                deltaTone="success"
               />
-              <StatCard label="Empreintes scellées" value="142 318" icon="shieldCheck" />
               <StatCard
-                label="En attente d'élim."
-                value="412"
+                label="Empreintes scellées"
+                value={stats.total.toLocaleString("fr-FR")}
+                icon="shieldCheck"
+              />
+              <StatCard
+                label="En attente d&apos;élim."
+                value={stats.pendingDestruction.toLocaleString("fr-FR")}
                 icon="trash"
                 hint="DUA dépassée"
               />
               <StatCard
                 label="Intégrité"
-                value="100 %"
+                value={`${stats.integrityPct} %`}
                 icon="checkCircle"
                 hint="dernier contrôle 19/05"
               />
@@ -148,47 +228,52 @@ export default async function AdminArchivesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {archives.map((r) => (
-                    <Tr key={r.cote}>
-                      <Td
-                        style={{
-                          fontFamily: "var(--font-mono)",
-                          fontSize: 12,
-                          fontWeight: 600,
-                        }}
-                      >
-                        {r.cote}
-                      </Td>
-                      <Td>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <Icon
-                            name="fileText"
-                            size={14}
-                            style={{ color: "var(--ink-500)" }}
-                          />
-                          <span style={{ fontWeight: 500 }}>{r.description}</span>
-                        </div>
-                      </Td>
-                      <Td>{r.producer}</Td>
-                      <Td style={{ color: "var(--ink-600)" }}>{r.versedAt}</Td>
-                      <Td style={{ fontWeight: 600 }}>{r.dua}</Td>
-                      <Td>
-                        <Badge tone={r.statusTone} dot>
-                          {r.status}
-                        </Badge>
-                      </Td>
-                      <Td style={{ fontSize: 12, color: "var(--ink-700)" }}>{r.finalSort}</Td>
-                      <Td
-                        style={{
-                          fontFamily: "var(--font-mono)",
-                          fontSize: 11,
-                          color: "var(--ink-600)",
-                        }}
-                      >
-                        {r.hash}
-                      </Td>
-                    </Tr>
-                  ))}
+                  {archives.map((r) => {
+                    const status = archiveStatusBadge(r.status)
+                    return (
+                      <Tr key={r.cote}>
+                        <Td
+                          style={{
+                            fontFamily: "var(--font-mono)",
+                            fontSize: 12,
+                            fontWeight: 600,
+                          }}
+                        >
+                          {r.cote}
+                        </Td>
+                        <Td>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <Icon
+                              name="fileText"
+                              size={14}
+                              style={{ color: "var(--ink-500)" }}
+                            />
+                            <span style={{ fontWeight: 500 }}>{r.description}</span>
+                          </div>
+                        </Td>
+                        <Td>{producerLabel}</Td>
+                        <Td style={{ color: "var(--ink-600)" }}>{longDate(r.versedAt)}</Td>
+                        <Td style={{ fontWeight: 600 }}>{r.dua}</Td>
+                        <Td>
+                          <Badge tone={status.tone} dot>
+                            {status.label}
+                          </Badge>
+                        </Td>
+                        <Td style={{ fontSize: 12, color: "var(--ink-700)" }}>
+                          {r.finalSort}
+                        </Td>
+                        <Td
+                          style={{
+                            fontFamily: "var(--font-mono)",
+                            fontSize: 11,
+                            color: "var(--ink-600)",
+                          }}
+                        >
+                          {shortHash(r.sha256)}
+                        </Td>
+                      </Tr>
+                    )
+                  })}
                 </tbody>
               </Table>
             </Card>
@@ -202,7 +287,8 @@ export default async function AdminArchivesPage() {
             >
               <Card>
                 <SectionHeading title="Conformité NF Z42-013" level={3} />
-                {compliance.map((c) => (
+                {/* TODO: migrer compliance vers Convex */}
+                {COMPLIANCE.map((c) => (
                   <div
                     key={c.title}
                     style={{
@@ -241,7 +327,7 @@ export default async function AdminArchivesPage() {
               <Card>
                 <SectionHeading
                   title="Élimination réglementaire"
-                  subtitle="412 unités d'archives à éliminer après visa du Directeur des Archives Nationales."
+                  subtitle={`${stats.pendingDestruction} unités d'archives à éliminer après visa du Directeur des Archives Nationales.`}
                   level={3}
                   action={
                     <Button variant="secondary" icon="trash" size="sm">
@@ -268,10 +354,11 @@ export default async function AdminArchivesPage() {
                       color: "var(--warning-600)",
                     }}
                   />
-                  <b>4 lots à valider.</b> Bordereau d&apos;élimination généré le 18/05, en
-                  attente du visa de la DGAN.
+                  <b>{ELIMINATION_LOTS.length} lots à valider.</b> Bordereau
+                  d&apos;élimination généré le 18/05, en attente du visa de la DGAN.
                 </div>
-                {lots.map((l) => (
+                {/* TODO: migrer elimination lots vers Convex */}
+                {ELIMINATION_LOTS.map((l) => (
                   <div
                     key={l.title}
                     style={{

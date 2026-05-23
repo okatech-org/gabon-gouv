@@ -68,3 +68,30 @@ export function formatNip(nip: string): string {
   }
   return nip
 }
+
+/* Libellé FR pour les rôles agents (snake_case Convex → label affiché). */
+export function agentRoleLabel(role: string): string {
+  switch (role) {
+    case "agent_instructeur":
+      return "Agent instructeur"
+    case "chef_service":
+      return "Chef de service"
+    case "officier_signataire":
+      return "Officier signataire"
+    case "admin_organisme":
+      return "Admin organisme"
+    case "admin_technique":
+      return "Admin technique"
+    default:
+      return role
+  }
+}
+
+/* Date longue FR "23 mai 2026". */
+export function longDate(ms: number): string {
+  return new Date(ms).toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  })
+}

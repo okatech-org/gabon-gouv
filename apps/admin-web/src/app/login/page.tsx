@@ -1,4 +1,4 @@
-import { Button, Field, Frame, Logo, RepublicBar, TextInput } from "@workspace/ui"
+import { Frame, Logo, RepublicBar } from "@workspace/ui"
 import { LoginForm } from "./login-form"
 
 export const metadata = {

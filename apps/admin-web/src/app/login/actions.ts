@@ -20,7 +20,9 @@ export async function signIn(formData: FormData): Promise<LoginResult> {
     result = await convex.mutation(api.auth.signInWithNip, { nip })
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Connexion impossible."
+      error instanceof Error && error.message
+        ? error.message
+        : "Connexion impossible — vérifiez que Convex est accessible."
     return { error: message }
   }
 

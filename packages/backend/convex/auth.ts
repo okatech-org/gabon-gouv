@@ -12,12 +12,10 @@ import { mutation, query, type QueryCtx } from "./_generated/server"
 const SESSION_TTL_MS = 1000 * 60 * 60 * 12 // 12 heures
 
 const generateToken = () => {
-  // Token court non cryptographique — assez aléatoire pour la démo.
-  return (
-    crypto.randomUUID() +
-    "-" +
-    Math.random().toString(36).slice(2, 10)
-  )
+  // Token non cryptographique — assez aléatoire pour la démo (faux IdP).
+  // À remplacer par `crypto.randomUUID()` quand on connectera un vrai IdP.
+  const part = () => Math.random().toString(36).slice(2, 10)
+  return `${part()}-${part()}-${part()}-${Date.now().toString(36)}`
 }
 
 /** Se connecter avec un NIP — renvoie un session token à stocker en cookie. */

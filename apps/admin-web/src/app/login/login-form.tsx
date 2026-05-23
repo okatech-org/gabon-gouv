@@ -1,24 +1,19 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useActionState } from "react"
 import { Alert, Button, Field, Icon, TextInput } from "@workspace/ui"
-import { signIn } from "./actions"
+import { signIn, type LoginResult } from "./actions"
+
+const initialState: LoginResult = {}
 
 export function LoginForm() {
-  const [error, setError] = useState<string | null>(null)
-  const [isPending, startTransition] = useTransition()
+  const [state, formAction, isPending] = useActionState(
+    async (_prev: LoginResult, formData: FormData) => signIn(formData),
+    initialState,
+  )
 
   return (
-    <form
-      action={(formData) => {
-        setError(null)
-        startTransition(async () => {
-          const result = await signIn(formData)
-          if (result?.error) setError(result.error)
-        })
-      }}
-      style={{ display: "flex", flexDirection: "column", gap: 16 }}
-    >
+    <form action={formAction} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div>
         <div
           style={{
@@ -51,9 +46,9 @@ export function LoginForm() {
         />
       </Field>
 
-      {error && (
+      {state?.error && (
         <Alert tone="danger" title="Connexion impossible">
-          {error}
+          {state.error}
         </Alert>
       )}
 

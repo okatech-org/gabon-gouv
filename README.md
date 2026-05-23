@@ -55,10 +55,11 @@ bunx convex dev
 # Choisis un nom de projet, ex: "gabon-connect-dev".
 # Une fois lancé, Convex génère packages/backend/convex/_generated/.
 
-# 3. Récupérer l'URL Convex et la mettre dans admin-web
-# Convex affiche : `npx convex dev` → `Convex functions deployed to: https://xxx.convex.cloud`
-# Copier dans apps/admin-web/.env.local :
-echo "NEXT_PUBLIC_CONVEX_URL=https://xxx.convex.cloud" > ../../apps/admin-web/.env.local
+# 3. Récupérer l'URL Convex (avec la région, ex: eu-west-1) et la mettre dans admin-web
+# L'URL exacte est dans packages/backend/.env.local sous CONVEX_URL :
+#   CONVEX_URL=https://xxx.eu-west-1.convex.cloud
+# Copier la valeur dans apps/admin-web/.env.local :
+echo "NEXT_PUBLIC_CONVEX_URL=https://xxx.eu-west-1.convex.cloud" > ../../apps/admin-web/.env.local
 
 # 4. Peupler la base avec le seed initial (une fois)
 # Dans le dashboard Convex ou via CLI :

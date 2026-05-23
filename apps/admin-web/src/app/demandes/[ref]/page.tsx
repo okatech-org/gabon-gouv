@@ -1,3 +1,4 @@
+import { notFound, redirect } from "next/navigation"
 import {
   AppHeader,
   Avatar,
@@ -14,26 +15,143 @@ import {
   Tabs,
   TextArea,
 } from "@workspace/ui"
-import { getCurrentAdmin, getInstruction } from "@workspace/mocks/admin"
+import { api } from "@workspace/backend/generated"
 import { ADMIN_NAV } from "@/lib/admin-nav"
+import { convex } from "@/lib/convex"
+import { getCurrentAgent } from "@/lib/current-agent"
+import {
+  agentRoleLabel,
+  longDate,
+  relativeTime,
+  shortDateTime,
+  statusBadge,
+} from "@/lib/format"
+
+interface InstructionPiece {
+  label: string
+  filename: string
+  sizeBytes: number
+  status: string
+  ocrConfidence?: number
+  required: boolean
+}
+
+interface InstructionVerification {
+  title: string
+  description: string
+  status: string
+}
+
+interface InstructionEvent {
+  kind: string
+  title: string
+  description?: string
+  actor?: string
+  occurredAt: number
+}
+
+interface InstructionData {
+  ref: string
+  status: string
+  progressPct: number
+  depositedAt: number
+  dueAt?: number
+  internalNote: string
+  payload?: Record<string, unknown>
+  service?: { title: string; slug: string }
+  assignedAgent?: { name: string; role: string }
+  citizen?: {
+    name: string
+    nip: string
+    email: string
+    birthDate: string
+    birthPlace: string
+    parents: string | null
+  }
+  pieces: InstructionPiece[]
+  verifications: InstructionVerification[]
+  events: InstructionEvent[]
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} Mo`
+  if (bytes >= 1_000) return `${(bytes / 1_000).toFixed(0)} Ko`
+  return `${bytes} o`
+}
+
+function verificationStatusOk(status: string): boolean {
+  return status === "ok" || status === "passed"
+}
+
+type PipelineStatus = "done" | "active" | "pending" | "error"
+
+function eventToPipeline(events: InstructionEvent[]): {
+  title: string
+  status: PipelineStatus
+  duration?: string
+}[] {
+  // Pipeline canonique des étapes de traitement.
+  const STAGES: { title: string; kinds: string[] }[] = [
+    { title: "Réception & contrôle", kinds: ["submitted", "received", "deposited"] },
+    { title: "Pré-instruction agent", kinds: ["assigned", "pre_instruction", "in_instruction"] },
+    { title: "Recherche registre", kinds: ["registry_check", "waiting_registry"] },
+    { title: "Visa officier", kinds: ["to_sign", "supervisor_review"] },
+    { title: "Signature & émission", kinds: ["signed", "issued"] },
+    { title: "Archivage probant", kinds: ["archived"] },
+  ]
+
+  const seen = new Set(events.map((e) => e.kind))
+  let activeFound = false
+
+  return STAGES.map((stage) => {
+    const matched = stage.kinds.some((k) => seen.has(k))
+    if (matched) {
+      return { title: stage.title, status: "done" as PipelineStatus }
+    }
+    if (!activeFound) {
+      activeFound = true
+      return { title: stage.title, status: "active" as PipelineStatus }
+    }
+    return { title: stage.title, status: "pending" as PipelineStatus }
+  })
+}
 
 export default async function AdminInstructionPage({
   params,
 }: {
   params: Promise<{ ref: string }>
 }) {
-  const { ref } = await params
-  const [admin, instruction] = await Promise.all([
-    getCurrentAdmin(),
-    getInstruction(ref),
-  ])
+  const session = await getCurrentAgent()
+  if (!session) redirect("/login")
 
-  const { citizen, verifications, sourceAct, pieces, internalNote, pipeline } = instruction
-  const okCount = verifications.filter((v) => v.status === "ok").length
+  const { ref } = await params
+  const instruction = (await convex.query(api.admin.requests.getInstruction, {
+    token: session.token,
+    ref,
+  })) as InstructionData | null
+
+  if (!instruction) notFound()
+
+  const { citizen, verifications, pieces, internalNote, events } = instruction
+  const okCount = verifications.filter((v) => verificationStatusOk(v.status)).length
+  const piecesValid = pieces.filter(
+    (p) => p.status === "uploaded" || p.status === "validated",
+  ).length
+  const pipeline = eventToPipeline(events)
+  const status = statusBadge(instruction.status)
+  const dueLabel = instruction.dueAt ? relativeTime(instruction.dueAt) : "—"
+
+  // Premier événement pour récupérer "Acte n°" depuis le payload si présent.
+  const sourceOrder =
+    (instruction.payload as { actOrder?: string } | undefined)?.actOrder ?? "—"
 
   return (
     <Frame width={1440} height={1100}>
-      <AppHeader org={admin.org} user={admin.name} role={admin.role} />
+      <AppHeader
+        org={session.agent.organism?.shortName ?? session.agent.organism?.name}
+        user={session.agent.name}
+        role={agentRoleLabel(session.agent.role)}
+      />
       <div style={{ display: "flex" }}>
         <Sidebar items={ADMIN_NAV} current="queue" />
         <main style={{ flex: 1, overflow: "hidden" }}>
@@ -44,8 +162,12 @@ export default async function AdminInstructionPage({
               </a>,
               instruction.ref,
             ]}
-            title={instruction.title}
-            subtitle={instruction.subtitle}
+            title={
+              instruction.service
+                ? `${instruction.service.title}${citizen ? ` · ${citizen.name}` : ""}`
+                : "Demande"
+            }
+            subtitle={`Déposée ${relativeTime(instruction.depositedAt)} · échéance ${dueLabel}`}
             meta={
               <>
                 <span style={{ fontSize: 13, color: "var(--ink-600)" }}>
@@ -56,12 +178,16 @@ export default async function AdminInstructionPage({
                   />
                   {instruction.ref}
                 </span>
-                <Badge tone="active" dot>
-                  En instruction
+                <Badge tone={status.tone} dot>
+                  {status.label}
                 </Badge>
-                <Badge tone="neutral" icon="user">
-                  Assignée à vous
-                </Badge>
+                {instruction.assignedAgent && (
+                  <Badge tone="neutral" icon="user">
+                    {instruction.assignedAgent.name === session.agent.name
+                      ? "Assignée à vous"
+                      : `Assignée à ${instruction.assignedAgent.name}`}
+                  </Badge>
+                )}
               </>
             }
             actions={
@@ -101,72 +227,82 @@ export default async function AdminInstructionPage({
                   { id: "instr", label: "Instruction" },
                   { id: "pieces", label: `Pièces (${pieces.length})` },
                   { id: "hist", label: "Historique" },
-                  { id: "messages", label: "Messages (2)" },
+                  { id: "messages", label: "Messages" },
                 ]}
                 current="instr"
                 variant="line"
               />
 
               {/* Source citoyen */}
-              <Card padded={false}>
-                <div
-                  style={{
-                    padding: 18,
-                    borderBottom: "1px solid var(--ink-150)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                    <Avatar name={citizen.name} tone="green" size={40} />
-                    <div>
-                      <div style={{ fontSize: 15, fontWeight: 700 }}>{citizen.name}</div>
-                      <div style={{ fontSize: 12, color: "var(--ink-600)" }}>
-                        NIP{" "}
-                        <span style={{ fontFamily: "var(--font-mono)" }}>{citizen.nip}</span> ·{" "}
-                        {citizen.email}
+              {citizen && (
+                <Card padded={false}>
+                  <div
+                    style={{
+                      padding: 18,
+                      borderBottom: "1px solid var(--ink-150)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                      <Avatar name={citizen.name} tone="green" size={40} />
+                      <div>
+                        <div style={{ fontSize: 15, fontWeight: 700 }}>{citizen.name}</div>
+                        <div style={{ fontSize: 12, color: "var(--ink-600)" }}>
+                          NIP{" "}
+                          <span style={{ fontFamily: "var(--font-mono)" }}>{citizen.nip}</span> ·{" "}
+                          {citizen.email}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <a
-                    href={`/dossiers/${citizen.nip.replace(/\s/g, "")}`}
-                    style={{ textDecoration: "none", display: "inline-flex" }}
-                  >
-                    <Button variant="ghost" iconRight="externalLink" size="sm">
-                      Voir son dossier 360°
-                    </Button>
-                  </a>
-                </div>
-                <div
-                  style={{
-                    padding: 18,
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: "14px 28px",
-                    fontSize: 13.5,
-                  }}
-                >
-                  {(
-                    [
-                      ["Type d'acte", citizen.type],
-                      ["Nombre de copies", citizen.copies],
-                      ["Date de naissance", citizen.birthDate],
-                      ["Lieu de naissance", citizen.birthPlace],
-                      ["Filiation déclarée", citizen.parents],
-                      ["Adresse e-mail", citizen.email],
-                    ] as const
-                  ).map(([k, v]) => (
-                    <div
-                      key={k}
-                      style={{ display: "grid", gridTemplateColumns: "160px 1fr" }}
+                    <a
+                      href={`/dossiers/${citizen.nip.replace(/\s/g, "")}`}
+                      style={{ textDecoration: "none", display: "inline-flex" }}
                     >
-                      <span style={{ color: "var(--ink-500)" }}>{k}</span>
-                      <span style={{ fontWeight: 600 }}>{v}</span>
-                    </div>
-                  ))}
-                </div>
-              </Card>
+                      <Button variant="ghost" iconRight="externalLink" size="sm">
+                        Voir son dossier 360°
+                      </Button>
+                    </a>
+                  </div>
+                  <div
+                    style={{
+                      padding: 18,
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "14px 28px",
+                      fontSize: 13.5,
+                    }}
+                  >
+                    {(
+                      [
+                        ["Type d'acte", instruction.service?.title ?? "—"],
+                        [
+                          "Référence",
+                          <span
+                            key="ref"
+                            style={{ fontFamily: "var(--font-mono)" }}
+                          >
+                            {instruction.ref}
+                          </span>,
+                        ],
+                        ["Date de naissance", citizen.birthDate],
+                        ["Lieu de naissance", citizen.birthPlace],
+                        ["Filiation déclarée", citizen.parents ?? "—"],
+                        ["Adresse e-mail", citizen.email],
+                      ] as const
+                    ).map(([k, v]) => (
+                      <div
+                        key={k}
+                        style={{ display: "grid", gridTemplateColumns: "160px 1fr" }}
+                      >
+                        <span style={{ color: "var(--ink-500)" }}>{k}</span>
+                        <span style={{ fontWeight: 600 }}>{v}</span>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
 
               {/* Vérifications automatiques */}
               <Card>
@@ -196,8 +332,9 @@ export default async function AdminInstructionPage({
                         height: 22,
                         borderRadius: "50%",
                         flexShrink: 0,
-                        background:
-                          v.status === "ok" ? "var(--success-500)" : "var(--ink-300)",
+                        background: verificationStatusOk(v.status)
+                          ? "var(--success-500)"
+                          : "var(--ink-300)",
                         color: "white",
                         display: "inline-flex",
                         alignItems: "center",
@@ -206,7 +343,7 @@ export default async function AdminInstructionPage({
                       }}
                     >
                       <Icon
-                        name={v.status === "ok" ? "check" : "clock"}
+                        name={verificationStatusOk(v.status) ? "check" : "clock"}
                         size={12}
                         stroke={3}
                       />
@@ -221,30 +358,70 @@ export default async function AdminInstructionPage({
                 ))}
               </Card>
 
-              {/* Acte source */}
+              {/* Historique des événements */}
               <Card>
                 <SectionHeading
-                  title="Acte source au registre"
-                  subtitle={`Acte n° ${sourceAct.order} — registre de naissances de Libreville, année 1992`}
+                  title="Historique d&apos;instruction"
+                  subtitle={`${events.length} événement${events.length > 1 ? "s" : ""} enregistré${events.length > 1 ? "s" : ""}`}
                   level={3}
-                  action={
-                    <Button variant="secondary" size="sm" icon="check">
-                      Confirmer correspondance
-                    </Button>
-                  }
                 />
                 <div
                   style={{
                     background: "var(--ink-50)",
                     border: "1px dashed var(--ink-300)",
                     borderRadius: 8,
-                    padding: 20,
-                    fontSize: 13,
-                    color: "var(--ink-700)",
-                    lineHeight: 1.7,
+                    padding: 16,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 10,
                   }}
                 >
-                  {sourceAct.text}
+                  {events.length === 0 ? (
+                    <span style={{ fontSize: 13, color: "var(--ink-500)" }}>
+                      Aucun événement pour le moment.
+                    </span>
+                  ) : (
+                    events.map((e, i) => (
+                      <div
+                        key={`${e.kind}-${i}`}
+                        style={{
+                          display: "flex",
+                          gap: 10,
+                          alignItems: "flex-start",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: "var(--ink-500)",
+                            minWidth: 110,
+                            fontFamily: "var(--font-mono)",
+                          }}
+                        >
+                          {shortDateTime(e.occurredAt)}
+                        </span>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600 }}>{e.title}</div>
+                          {e.description && (
+                            <div style={{ fontSize: 12.5, color: "var(--ink-600)" }}>
+                              {e.description}
+                            </div>
+                          )}
+                          {e.actor && (
+                            <div
+                              style={{
+                                fontSize: 11,
+                                color: "var(--ink-500)",
+                                marginTop: 2,
+                              }}
+                            >
+                              par {e.actor}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
                 <div
                   style={{
@@ -256,17 +433,17 @@ export default async function AdminInstructionPage({
                   }}
                 >
                   <span>
-                    <b>Registre :</b> {sourceAct.register}
+                    <b>Référence :</b>{" "}
+                    <span style={{ fontFamily: "var(--font-mono)" }}>{instruction.ref}</span>
                   </span>
                   <span>
-                    <b>Page :</b> {sourceAct.page}
+                    <b>Déposée :</b> {longDate(instruction.depositedAt)}
                   </span>
-                  <span>
-                    <b>Numéro d&apos;ordre :</b> {sourceAct.order}
-                  </span>
-                  <span>
-                    <b>Mentions :</b> {sourceAct.mentions}
-                  </span>
+                  {sourceOrder !== "—" && (
+                    <span>
+                      <b>Numéro d&apos;ordre :</b> {sourceOrder}
+                    </span>
+                  )}
                 </div>
               </Card>
             </div>
@@ -294,11 +471,20 @@ export default async function AdminInstructionPage({
                   >
                     Échéance
                   </div>
-                  <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4 }}>Dans 1 jour</div>
-                  <div style={{ fontSize: 12, color: "var(--ink-600)", marginTop: 2 }}>
-                    21 mai 14:32 → 23 mai 14:32
+                  <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4 }}>
+                    {instruction.dueAt ? relativeTime(instruction.dueAt) : "—"}
                   </div>
-                  <Progress value={48} label="48 %" tone="primary" />
+                  <div style={{ fontSize: 12, color: "var(--ink-600)", marginTop: 2 }}>
+                    {shortDateTime(instruction.depositedAt)}
+                    {instruction.dueAt
+                      ? ` → ${shortDateTime(instruction.dueAt)}`
+                      : ""}
+                  </div>
+                  <Progress
+                    value={instruction.progressPct}
+                    label={`${instruction.progressPct} %`}
+                    tone="primary"
+                  />
                 </div>
               </Card>
 
@@ -355,7 +541,7 @@ export default async function AdminInstructionPage({
                     Pièces justificatives
                   </div>
                   <Badge tone="archived" size="sm">
-                    {pieces.length}/{pieces.length}
+                    {piecesValid}/{pieces.length}
                   </Badge>
                 </div>
                 {pieces.map((p) => (
@@ -373,7 +559,10 @@ export default async function AdminInstructionPage({
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 600 }}>{p.filename}</div>
                       <div style={{ fontSize: 11.5, color: "var(--ink-500)" }}>
-                        {p.size} · OCR {p.ocrConfidence} %
+                        {formatBytes(p.sizeBytes)}
+                        {typeof p.ocrConfidence === "number"
+                          ? ` · OCR ${p.ocrConfidence} %`
+                          : ""}
                       </div>
                     </div>
                     <Icon name="eye" size={15} style={{ color: "var(--ink-500)" }} />
