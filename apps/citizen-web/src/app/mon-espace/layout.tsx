@@ -22,12 +22,18 @@ export default async function CitizenSpaceLayout({
   const navItems = buildCitizenNav()
 
   return (
+    <>
+      {/* Verrouille html/body au viewport pour ce sous-arbre afin d'éviter
+          une double scrollbar (body + main). Scoped à /mon-espace pour
+          préserver le scroll naturel des pages publiques citoyennes. */}
+      <style>{`html, body { height: 100%; overflow: hidden; margin: 0; }`}</style>
     <div
       style={{
-        minHeight: "100vh",
+        height: "100dvh",
         display: "flex",
         flexDirection: "column",
         background: "var(--ink-100)",
+        overflow: "hidden",
       }}
     >
       <AppHeader user={citizen.name} role="Citoyenne" />
@@ -37,7 +43,8 @@ export default async function CitizenSpaceLayout({
           style={{
             flex: 1,
             minWidth: 0,
-            overflow: "auto",
+            overflowY: "auto",
+            overflowX: "hidden",
             display: "flex",
             flexDirection: "column",
           }}
@@ -46,5 +53,6 @@ export default async function CitizenSpaceLayout({
         </main>
       </div>
     </div>
+    </>
   )
 }

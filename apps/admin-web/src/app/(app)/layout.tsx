@@ -32,10 +32,11 @@ export default async function AppShellLayout({ children }: { children: ReactNode
   return (
     <div
       style={{
-        minHeight: "100vh",
+        height: "100dvh",
         display: "flex",
         flexDirection: "column",
         background: "var(--ink-100)",
+        overflow: "hidden",
       }}
     >
       <AppHeader
@@ -49,7 +50,8 @@ export default async function AppShellLayout({ children }: { children: ReactNode
           style={{
             flex: 1,
             minWidth: 0,
-            overflow: "auto",
+            overflowY: "auto",
+            overflowX: "hidden",
             display: "flex",
             flexDirection: "column",
           }}

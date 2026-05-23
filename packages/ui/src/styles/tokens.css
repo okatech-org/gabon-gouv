@@ -163,3 +163,45 @@ select {
     transform: rotate(360deg);
   }
 }
+
+/* ============================================================
+   Scrollbars — charte Gabon Connect
+   Thumb neutre (ink-300) qui s'éclaire en bleu institutionnel
+   au survol. Piste transparente pour rester discret.
+   ============================================================ */
+
+/* Firefox — barre fine, couleurs du thumb / track */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-300) transparent;
+}
+
+/* WebKit (Chrome, Safari, Edge) */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--ink-300);
+  background-clip: content-box;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  transition: background-color 0.12s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--primary-400);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background-color: var(--primary-500);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}

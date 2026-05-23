@@ -21,6 +21,9 @@ export const PageHeader = ({
       padding: "24px 32px 16px",
       borderBottom: "1px solid var(--ink-200)",
       background: "white",
+      position: "sticky",
+      top: 0,
+      zIndex: 4,
     }}
   >
     {breadcrumbs && (

@@ -7,7 +7,8 @@ export const Table = ({ children }: { children: ReactNode }) => (
   <div
     style={{
       width: "100%",
-      overflow: "auto",
+      overflowX: "auto",
+      overflowY: "visible",
       border: "1px solid var(--ink-200)",
       borderRadius: 8,
       background: "white",

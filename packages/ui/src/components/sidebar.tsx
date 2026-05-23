@@ -32,6 +32,8 @@ export const Sidebar = ({ items, current, onSelect, footer }: SidebarProps) => {
         display: "flex",
         flexDirection: "column",
         alignSelf: "stretch",
+        overflowY: "auto",
+        minHeight: 0,
       }}
     >
       <ul
