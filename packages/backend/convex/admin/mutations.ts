@@ -1,5 +1,6 @@
 import { v } from "convex/values"
-import { mutation, type MutationCtx } from "../_generated/server"
+import type { MutationCtx } from "../_generated/server"
+import { mutation } from "../lib/triggers" // wrapper trigger-aware (ADR-0007)
 import { requireAgent } from "../auth"
 import type { Id } from "../_generated/dataModel"
 

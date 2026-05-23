@@ -1,5 +1,6 @@
 import { v } from "convex/values"
-import { mutation, query, type QueryCtx } from "./_generated/server"
+import { query, type QueryCtx } from "./_generated/server"
+import { mutation } from "./lib/triggers" // wrapper trigger-aware (ADR-0007)
 
 /**
  * Auth simulée — faux IdP "Identité numérique gabonaise" (NIP).
