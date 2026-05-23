@@ -23,3 +23,14 @@ export async function clearSession() {
   const store = await cookies()
   store.delete(SESSION_COOKIE)
 }
+
+/**
+ * Renvoie le token, throw si absent. À utiliser dans les server actions.
+ * Le middleware redirige déjà vers /login si la session manque, mais on
+ * sécurise au cas où un client appellerait l'action en dehors d'un layout.
+ */
+export async function requireSessionToken(): Promise<string> {
+  const token = await getSessionToken()
+  if (!token) throw new Error("Session expirée — reconnectez-vous.")
+  return token
+}

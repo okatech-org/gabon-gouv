@@ -11,7 +11,6 @@ import {
   Progress,
   SectionHeading,
   Tabs,
-  TextArea,
 } from "@workspace/ui"
 import { api } from "@workspace/backend/generated"
 import { convex } from "@/lib/convex"
@@ -22,6 +21,9 @@ import {
   shortDateTime,
   statusBadge,
 } from "@/lib/format"
+import { InternalNoteEditor } from "./internal-note-editor"
+import { RequestPieceButton } from "./request-piece-button"
+import { SignAndIssueButton } from "./sign-button"
 
 interface InstructionPiece {
   label: string
@@ -186,9 +188,10 @@ export default async function AdminInstructionPage({
             <Button variant="secondary" icon="share">
               Transférer
             </Button>
-            <Button variant="success" icon="check">
-              Valider &amp; signer
-            </Button>
+            <SignAndIssueButton
+              requestRef={instruction.ref}
+              disabled={instruction.status === "issued"}
+            />
           </>
         }
       />
@@ -559,9 +562,7 @@ export default async function AdminInstructionPage({
               </div>
             ))}
             <div style={{ padding: 14 }}>
-              <Button variant="ghost" icon="paperclip" size="sm">
-                Demander une pièce
-              </Button>
+              <RequestPieceButton requestRef={instruction.ref} />
             </div>
           </Card>
 
@@ -585,10 +586,9 @@ export default async function AdminInstructionPage({
               </div>
             </div>
             <div style={{ padding: 14 }}>
-              <TextArea
-                placeholder="Notes internes (non visibles par le citoyen)…"
+              <InternalNoteEditor
+                requestRef={instruction.ref}
                 defaultValue={internalNote}
-                style={{ fontSize: 13 }}
               />
             </div>
           </Card>
