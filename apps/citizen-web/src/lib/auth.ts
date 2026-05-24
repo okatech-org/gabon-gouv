@@ -33,6 +33,16 @@ export const auth = betterAuth({
           clientId: process.env.IDN_CLIENT_ID ?? "missing-IDN_CLIENT_ID",
           clientSecret:
             process.env.IDN_CLIENT_SECRET ?? "missing-IDN_CLIENT_SECRET",
+          // Convex sépare l'API (api.identite.ga) des HTTP actions
+          // (site.identite.ga). Les routes OAuth/OIDC sont des HTTP
+          // actions servies sur le host `site.*` sous
+          // /api/auth/convex/.well-known/openid-configuration (path
+          // confirmé par ANINF — segment `convex` requis).
+          // À retirer dès @idn-ga/better-auth v0.2 (le SDK aura le
+          // bon défaut). L'issuer est lu depuis le JSON discovery.
+          discoveryUrl:
+            process.env.IDN_DISCOVERY_URL ??
+            "https://site.identite.ga/api/auth/convex/.well-known/openid-configuration",
           acrValues: ["eidas2"],
           scopes: ["openid", "profile", "email"],
         }) as unknown as GenericOAuthConfig,

@@ -17,10 +17,21 @@ NEXT_PUBLIC_BETTER_AUTH_URL=http://localhost:4000
 
 IDN_CLIENT_ID=<client_id émis par identité.ga>
 IDN_CLIENT_SECRET=<client_secret correspondant>
+
+# Override discovery (default visible dans lib/auth.ts) :
+# IDN_DISCOVERY_URL=https://site.identite.ga/api/auth/convex/.well-known/openid-configuration
 ```
 
-L'issuer défault est `https://identite.ga` (LoA 2 minimum via `acr_values=eidas2`).
-Override possible via `lib/auth.ts` (`idn({ issuer: "https://sandbox..." })`).
+LoA 2 minimum via `acr_values=eidas2`. Le plugin npm v0.1 pointe par défaut sur
+`https://identite.ga` (site vitrine) — incorrect. Convex sépare les deux hosts :
+- `api.identite.ga` → API Convex (queries, mutations, actions)
+- `site.identite.ga` → HTTP actions Convex (routes OAuth/OIDC)
+
+Le discovery est servi sous `/api/auth/convex/.well-known/openid-configuration`
+(segment `convex` requis — confirmé par ANINF). On override uniquement
+`discoveryUrl` dans `lib/auth.ts` ; l'issuer est lu depuis le JSON discovery
+(= `https://site.identite.ga`). À retirer dès `@idn-ga/better-auth` v0.2 (le
+plugin aura le bon défaut côté ANINF).
 
 ### Provisioning des citoyens
 
