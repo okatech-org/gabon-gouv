@@ -243,6 +243,159 @@ export const listRelatedRequests = query({
 })
 
 /* ============================================================
+   Query: listVersions d'un template (historique)
+   ============================================================ */
+export const listTemplateVersions = query({
+  args: {
+    token: v.string(),
+    serviceVariantId: v.id("serviceVariants"),
+    key: v.string(),
+  },
+  handler: async (ctx, { token, serviceVariantId, key }) => {
+    const agent = await requireAgent(ctx, token)
+    const actor = actorFromAgent(agent)
+    assertCan(actor, "service.read")
+
+    // Vérifie que la variante est bien dans l'organisme courant
+    const variant = await ctx.db.get(serviceVariantId)
+    if (!variant) throw new Error("Variante introuvable.")
+    const service = await ctx.db.get(variant.serviceId)
+    if (!service || service.organismId !== agent.organismId) {
+      throw new Error("Variante hors organisme.")
+    }
+
+    const templates = await ctx.db
+      .query("documentTemplates")
+      .withIndex("by_variant", (q) => q.eq("serviceVariantId", serviceVariantId))
+      .collect()
+    return templates
+      .filter((t) => t.key === key)
+      .sort((a, b) => b._creationTime - a._creationTime)
+      .map((t) => ({
+        id: t._id,
+        version: t.version,
+        status: t.status,
+        title: t.title,
+        validatedByComite: t.validatedByComite ?? false,
+        validatedAt: t.validatedAt ?? null,
+        createdAt: t._creationTime,
+      }))
+  },
+})
+
+/* ============================================================
+   Query: previewTemplate (rendu HTML simple à partir d'un payload
+   d'exemple ou des données d'une demande réelle)
+   ============================================================ */
+export const previewTemplate = query({
+  args: {
+    token: v.string(),
+    templateId: v.id("documentTemplates"),
+    sampleRequestRef: v.optional(v.string()),
+  },
+  handler: async (ctx, { token, templateId, sampleRequestRef }) => {
+    const agent = await requireAgent(ctx, token)
+    const actor = actorFromAgent(agent)
+    assertCan(actor, "service.read")
+
+    const template = await ctx.db.get(templateId)
+    if (!template) throw new Error("Template introuvable.")
+    const variant = await ctx.db.get(template.serviceVariantId)
+    if (!variant) throw new Error("Variante introuvable.")
+    const service = await ctx.db.get(variant.serviceId)
+    if (!service || service.organismId !== agent.organismId) {
+      throw new Error("Template hors organisme.")
+    }
+
+    const variables = await ctx.db
+      .query("documentTemplateVariables")
+      .withIndex("by_template", (q) => q.eq("templateId", template._id))
+      .collect()
+
+    // Construit les valeurs : si on a une demande réelle, on essaie d'en tirer
+    // quelques infos basiques ; sinon valeurs d'exemple.
+    const values: Record<string, string> = {}
+    let sample: Doc<"requests"> | null = null
+    if (sampleRequestRef) {
+      sample = await ctx.db
+        .query("requests")
+        .withIndex("by_ref", (q) => q.eq("ref", sampleRequestRef))
+        .unique()
+      if (sample && sample.organismId !== agent.organismId) sample = null
+    }
+    const sampleCitizen = sample ? await ctx.db.get(sample.citizenId) : null
+
+    for (const variable of variables) {
+      values[variable.key] = resolveVariableSample(
+        variable,
+        sample,
+        sampleCitizen,
+      )
+    }
+
+    const rendered = template.bodyTemplate.replace(
+      /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g,
+      (_, key: string) => values[key] ?? `[[${key} non renseignée]]`,
+    )
+
+    return {
+      title: template.title,
+      version: template.version,
+      bodyHtml: textToParagraphsHtml(rendered),
+      missingVariables: variables
+        .filter((v) => values[v.key]?.startsWith("[[") || !values[v.key])
+        .map((v) => v.key),
+      isSampleReal: sample !== null,
+    }
+  },
+})
+
+function resolveVariableSample(
+  variable: Doc<"documentTemplateVariables">,
+  request: Doc<"requests"> | null,
+  citizen: Doc<"citizens"> | null,
+): string {
+  // Si on a un échantillon réel, on tente quelques mappings basiques.
+  if (request && citizen) {
+    if (variable.source === "citizen_profile") {
+      if (variable.key === "nom") return citizen.name
+      if (variable.key === "nip") return citizen.nip
+    }
+    if (variable.source === "request_payload" && request.payload) {
+      const payload = request.payload as Record<string, unknown>
+      const value = payload[variable.key]
+      if (value !== undefined) return String(value)
+    }
+  }
+
+  // Sinon valeurs d'exemple
+  const samples: Record<string, string> = {
+    nom: "OBAME",
+    prenoms: "Marie Estelle",
+    date_naissance: "14 mars 1992",
+    lieu_naissance: "Libreville, Estuaire",
+    pere: "OBAME Jean-Pierre",
+    mere: "MBOUMBA Antoinette",
+    numero_acte: "EC-LBV-1992-04812",
+    annee: new Date().getFullYear().toString(),
+    nip: "1 84 12 76 005 042",
+  }
+  return samples[variable.key] ?? `[[${variable.key} non renseignée]]`
+}
+
+function textToParagraphsHtml(text: string): string {
+  return text
+    .split(/\n{2,}/)
+    .map(
+      (p) =>
+        `<p>${p.replace(/\n/g, "<br/>").replace(/[<>&]/g, (c) =>
+          c === "<" ? "&lt;" : c === ">" ? "&gt;" : "&amp;",
+        )}</p>`,
+    )
+    .join("\n")
+}
+
+/* ============================================================
    Mutation: createService
    ============================================================ */
 export const createService = mutation({

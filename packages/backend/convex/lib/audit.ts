@@ -34,8 +34,16 @@ interface WriteAuditArgs {
 
 /**
  * Sérialise un payload de manière déterministe et calcule son SHA-256.
- * On évite d'ajouter de dépendance — on utilise WebCrypto disponible dans Convex.
+ *
+ * Le runtime Convex (V8) expose WebCrypto et TextEncoder en globaux, mais le
+ * tsconfig n'inclut pas la lib DOM. On les déclare donc localement plutôt que
+ * d'élargir `lib` à tout le DOM.
  */
+declare const TextEncoder: { new (): { encode(s: string): Uint8Array } }
+declare const crypto: {
+  subtle: { digest(algo: string, data: Uint8Array): Promise<ArrayBuffer> }
+}
+
 async function sha256Hex(payload: unknown): Promise<string> {
   const text = JSON.stringify(payload ?? null)
   const bytes = new TextEncoder().encode(text)
