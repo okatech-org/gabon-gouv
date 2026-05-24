@@ -9,8 +9,12 @@ interface Props {
 }
 
 export function ApercuPanel({ slug, status, title }: Props) {
+  // Citizen-web tourne en HTTPS local (Next --experimental-https) parce que
+  // better-auth + IDN OIDC exigent un redirect_uri en https. Le fallback
+  // par défaut reflète donc ce setup. Surcharger via NEXT_PUBLIC_CITIZEN_WEB_URL
+  // si l'app citizen tourne ailleurs (ex. staging, prod).
   const citizenAppUrl =
-    process.env.NEXT_PUBLIC_CITIZEN_WEB_URL ?? "http://localhost:4000"
+    process.env.NEXT_PUBLIC_CITIZEN_WEB_URL ?? "https://localhost:4000"
   const previewUrl = `${citizenAppUrl}/services/${slug}`
 
   return (
