@@ -183,10 +183,14 @@ export default async function ServiceDetailPage({
         </div>
       )}
 
-      {/* Tabs nav — pure SSR via <Link> + searchParams */}
+      {/* Tabs nav — pure SSR via <Link> + searchParams.
+          `flexShrink: 0` est CRITIQUE : <main> de (app)/layout est en
+          display:flex flex-direction:column, donc tout enfant sans
+          flexShrink:0 risque d'être écrasé par flexbox. */}
       <nav
         aria-label="Sections de configuration du service"
         style={{
+          flexShrink: 0,
           marginTop: 16,
           padding: "0 32px",
           borderBottom: "1px solid var(--ink-200)",
