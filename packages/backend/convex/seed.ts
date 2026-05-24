@@ -719,6 +719,585 @@ export const reset = mutation({
     }
 
     // ════════════════════════════════════════════════════════
+    // 5b. Catalogue enrichi — services réels cross-organismes
+    //     Données issues de docs/real-gabon-procedures.md (cf. sources).
+    //     Chaque service est créé publié avec pièces réelles, frais
+    //     officiels en FCFA, délais réalistes et références légales.
+    // ════════════════════════════════════════════════════════
+
+    /* ----- DG Documentation (DGDI) — CNI, passeport, séjour ----- */
+
+    const svcCni = await ctx.db.insert("services", {
+      organismId: dgDocumentation,
+      categorySlug: "identite",
+      slug: "carte-identite-nationale",
+      title: "Carte Nationale d'Identité (CNI)",
+      category: "Identité & voyage",
+      description:
+        "Pièce d'identité officielle obligatoire pour les citoyens gabonais à partir de 16 ans. Valable 10 ans.",
+      longDescription:
+        "La CNI est délivrée par la DGDI. La CNIE (version électronique) peut être demandée en ligne sur edgdi.dgdi.ga si vous disposez déjà d'un passeport biométrique valide. Sinon, la demande se fait au commissariat ou à la préfecture.",
+      legalReferences: [
+        "Loi 12/2009 portant Code de la nationalité gabonaise",
+        "Décret n° 1259/PR/MISD du 25 octobre 2011",
+      ],
+      whoCanApply: "Citoyens gabonais à partir de 16 ans.",
+      deliveryMode: "hybrid",
+      online: true,
+      fee: "5 000 FCFA",
+      feeFcfa: 5000,
+      delayHours: 720, // 1 mois (officiel — réel : 3-6 mois)
+      status: "published",
+      satisfaction: 3.8,
+      requestsLast30d: 412,
+    })
+    const variantCniFirst = await ctx.db.insert("serviceVariants", {
+      serviceId: svcCni,
+      key: "premiere_demande",
+      label: "Première demande",
+      description:
+        "Pour les jeunes de 16 ans ou plus n'ayant jamais eu de CNI.",
+      whoCanApply: "Citoyens gabonais sans CNI précédente.",
+      isDefault: true,
+      feeFcfaOverride: 5000,
+      order: 0,
+    })
+    const variantCniRenew = await ctx.db.insert("serviceVariants", {
+      serviceId: svcCni,
+      key: "renouvellement",
+      label: "Renouvellement",
+      description: "À l'approche de l'expiration ou en cas de changement d'état civil.",
+      whoCanApply: "Titulaires d'une CNI en cours ou expirée.",
+      isDefault: false,
+      feeFcfaOverride: 5000,
+      order: 1,
+    })
+    const variantCniLost = await ctx.db.insert("serviceVariants", {
+      serviceId: svcCni,
+      key: "perte_vol",
+      label: "Perte ou vol",
+      description: "Avec déclaration préalable au commissariat.",
+      whoCanApply: "Titulaires ayant déclaré la perte/vol.",
+      isDefault: false,
+      feeOverride: "10 000 FCFA",
+      feeFcfaOverride: 10000,
+      order: 2,
+    })
+    await ctx.db.insert("serviceRequirements", {
+      serviceId: svcCni,
+      label: "Acte de naissance copie intégrale",
+      description: "Légalisé, de moins de 3 mois.",
+      required: true,
+      acceptedDocTypes: ["acte_naissance"],
+      autofillSource: "previous_request",
+      order: 0,
+    })
+    await ctx.db.insert("serviceRequirements", {
+      serviceId: svcCni,
+      label: "Certificat de résidence",
+      description: "Délivré par le chef de quartier ou la mairie.",
+      required: true,
+      acceptedDocTypes: ["certificat_residence", "justif_domicile"],
+      autofillSource: "none",
+      order: 1,
+    })
+    await ctx.db.insert("serviceRequirements", {
+      serviceId: svcCni,
+      label: "Photos d'identité fond blanc",
+      description: "4 photos récentes au format standard.",
+      required: true,
+      acceptedDocTypes: ["photo_identite"],
+      order: 2,
+    })
+    await ctx.db.insert("serviceRequirements", {
+      serviceId: svcCni,
+      label: "Déclaration de perte",
+      description:
+        "Délivrée par le commissariat. Uniquement pour la variante « Perte ou vol ».",
+      required: false,
+      acceptedDocTypes: ["attestation"],
+      variantOverrides: [
+        {
+          variantId: variantCniLost,
+          required: true,
+          acceptedDocTypes: ["attestation"],
+        },
+      ],
+      order: 3,
+    })
+
+    const svcPasseport = await ctx.db.insert("services", {
+      organismId: dgDocumentation,
+      categorySlug: "identite",
+      slug: "passeport-biometrique",
+      title: "Passeport biométrique",
+      category: "Identité & voyage",
+      description:
+        "Document de voyage international avec puce biométrique. Donne droit au visa CEMAC d'un mois.",
+      legalReferences: ["Décret n° 0648/PR/MISPID du 27 mai 2014"],
+      whoCanApply: "Citoyens gabonais. Pour mineurs < 16 ans : autorisation parentale.",
+      deliveryMode: "in_person",
+      online: false,
+      fee: "65 000 FCFA",
+      feeFcfa: 65000,
+      delayHours: 336, // 14 jours
+      status: "published",
+      satisfaction: 4.0,
+      requestsLast30d: 198,
+    })
+    await ctx.db.insert("serviceVariants", {
+      serviceId: svcPasseport,
+      key: "adulte",
+      label: "Adulte",
+      isDefault: true,
+      order: 0,
+    })
+    await ctx.db.insert("serviceVariants", {
+      serviceId: svcPasseport,
+      key: "mineur",
+      label: "Mineur (< 16 ans)",
+      description: "Nécessite l'autorisation parentale.",
+      isDefault: false,
+      order: 1,
+    })
+    await ctx.db.insert("serviceRequirements", {
+      serviceId: svcPasseport,
+      label: "Acte de naissance original",
+      required: true,
+      acceptedDocTypes: ["acte_naissance"],
+      autofillSource: "previous_request",
+      order: 0,
+    })
+    await ctx.db.insert("serviceRequirements", {
+      serviceId: svcPasseport,
+      label: "CNI en cours de validité",
+      required: true,
+      acceptedDocTypes: ["cni"],
+      autofillSource: "citizen_identity",
+      order: 1,
+    })
+    await ctx.db.insert("serviceRequirements", {
+      serviceId: svcPasseport,
+      label: "Photos d'identité conformes OACI",
+      description: "4 photos récentes, format normalisé voyage.",
+      required: true,
+      acceptedDocTypes: ["photo_identite"],
+      order: 2,
+    })
+
+    const svcSejour = await ctx.db.insert("services", {
+      organismId: dgDocumentation,
+      categorySlug: "identite",
+      slug: "carte-sejour",
+      title: "Carte de séjour",
+      category: "Identité & voyage",
+      description:
+        "Document obligatoire pour tout étranger résidant au Gabon plus de 3 mois.",
+      legalReferences: ["Loi 5/86 du 18 juin 1986 sur la condition des étrangers"],
+      whoCanApply:
+        "Étrangers majeurs séjournant plus de 3 mois au Gabon.",
+      deliveryMode: "in_person",
+      online: false,
+      fee: "À partir de 50 000 FCFA",
+      feeFcfa: 50000,
+      delayHours: 720,
+      status: "published",
+      satisfaction: 3.5,
+      requestsLast30d: 86,
+    })
+    await ctx.db.insert("serviceVariants", {
+      serviceId: svcSejour,
+      key: "temporaire",
+      label: "Temporaire (1 an)",
+      description: "1re demande, employés, étudiants.",
+      isDefault: true,
+      feeFcfaOverride: 50000,
+      order: 0,
+    })
+    await ctx.db.insert("serviceVariants", {
+      serviceId: svcSejour,
+      key: "ordinaire",
+      label: "Ordinaire (2 ans)",
+      description: "Après 3 ans de résidence continue.",
+      isDefault: false,
+      feeFcfaOverride: 80000,
+      order: 1,
+    })
+    await ctx.db.insert("serviceVariants", {
+      serviceId: svcSejour,
+      key: "resident",
+      label: "Résident (5 ans)",
+      description: "5+ ans de résidence ou conjoint(e) gabonais(e).",
+      isDefault: false,
+      feeFcfaOverride: 150000,
+      order: 2,
+    })
+
+    /* ----- Min. Justice — Casier judiciaire B3 ----- */
+
+    const svcCasier = await ctx.db.insert("services", {
+      organismId: minJustice,
+      categorySlug: "justice",
+      slug: "casier-judiciaire-b3",
+      title: "Casier judiciaire (Bulletin N°3)",
+      category: "Justice",
+      description:
+        "Extrait du casier judiciaire mentionnant les condamnations pour crimes graves. Délivré par le Tribunal de Première Instance. Valable 3 mois.",
+      legalReferences: [
+        "Articles 786 à 803 du Code de procédure pénale gabonais",
+      ],
+      whoCanApply:
+        "Tout citoyen gabonais pour lui-même, ou via procuration légalisée.",
+      deliveryMode: "hybrid",
+      online: true,
+      fee: "2 000 FCFA",
+      feeFcfa: 2000,
+      delayHours: 48,
+      status: "published",
+      satisfaction: 4.6,
+      requestsLast30d: 524,
+    })
+    const variantCasierSelf = await ctx.db.insert("serviceVariants", {
+      serviceId: svcCasier,
+      key: "personne_morale_physique",
+      label: "Pour soi-même",
+      description: "Délai 24-48 h, souvent même jour à Libreville.",
+      isDefault: true,
+      order: 0,
+    })
+    await ctx.db.insert("serviceVariants", {
+      serviceId: svcCasier,
+      key: "par_procuration",
+      label: "Par procuration",
+      description:
+        "Pouvoir manuscrit légalisé requis. Délai légèrement plus long.",
+      isDefault: false,
+      order: 1,
+    })
+    await ctx.db.insert("serviceRequirements", {
+      serviceId: svcCasier,
+      label: "Pièce d'identité",
+      description: "CNI ou passeport en cours de validité.",
+      required: true,
+      acceptedDocTypes: ["cni", "passeport"],
+      autofillSource: "citizen_identity",
+      order: 0,
+    })
+    await ctx.db.insert("serviceRequirements", {
+      serviceId: svcCasier,
+      label: "Acte de naissance copie intégrale",
+      description: "De moins de 3 mois.",
+      required: true,
+      acceptedDocTypes: ["acte_naissance"],
+      autofillSource: "previous_request",
+      order: 1,
+    })
+    const reqProcuration = await ctx.db.insert("serviceRequirements", {
+      serviceId: svcCasier,
+      label: "Pouvoir manuscrit légalisé",
+      description:
+        "Notaire ou mairie. Uniquement si demande pour autrui.",
+      required: false,
+      acceptedDocTypes: ["mandat"],
+      variantOverrides: [
+        {
+          variantId: variantCasierSelf,
+          required: false,
+          acceptedDocTypes: ["mandat"],
+        },
+      ],
+      order: 2,
+    })
+    void reqProcuration
+
+    /* ----- ANPI — Création d'entreprise ----- */
+
+    const svcSarl = await ctx.db.insert("services", {
+      organismId: anpi,
+      categorySlug: "entreprise",
+      slug: "creation-sarl",
+      title: "Création d'une SARL en ligne",
+      category: "Entreprise",
+      description:
+        "Immatriculation 100% en ligne via le Guichet Numérique de l'Investissement (GNI). Capital minimum 100 000 FCFA. RCCM et NIF délivrés sous 24-72 heures.",
+      legalReferences: [
+        "Acte uniforme OHADA sur le droit des sociétés commerciales et du GIE",
+        "Loi 015/2017 portant Code des investissements de la République gabonaise",
+      ],
+      whoCanApply:
+        "Toute personne majeure (gabonaise ou résidente) souhaitant créer une SARL avec 1 à N associés.",
+      deliveryMode: "online",
+      online: true,
+      fee: "85 000 FCFA",
+      feeFcfa: 85000,
+      delayHours: 72,
+      status: "published",
+      satisfaction: 4.7,
+      requestsLast30d: 218,
+    })
+    await ctx.db.insert("serviceVariants", {
+      serviceId: svcSarl,
+      key: "sarl_unipersonnelle",
+      label: "SARL unipersonnelle",
+      description: "Un seul associé. Idéal pour entrepreneurs individuels.",
+      isDefault: true,
+      order: 0,
+    })
+    await ctx.db.insert("serviceVariants", {
+      serviceId: svcSarl,
+      key: "sarl_pluripersonnelle",
+      label: "SARL pluripersonnelle",
+      description: "Plusieurs associés (2 minimum).",
+      isDefault: false,
+      order: 1,
+    })
+    await ctx.db.insert("serviceRequirements", {
+      serviceId: svcSarl,
+      label: "Pièce d'identité du/des gérant(s)",
+      required: true,
+      acceptedDocTypes: ["cni", "passeport"],
+      autofillSource: "citizen_identity",
+      order: 0,
+    })
+    await ctx.db.insert("serviceRequirements", {
+      serviceId: svcSarl,
+      label: "Justificatif de domicile du gérant",
+      description: "De moins de 3 mois.",
+      required: true,
+      acceptedDocTypes: ["justif_domicile"],
+      order: 1,
+    })
+    await ctx.db.insert("serviceRequirements", {
+      serviceId: svcSarl,
+      label: "Statuts signés",
+      description: "Format PDF, signés par tous les associés.",
+      required: true,
+      acceptedDocTypes: ["autre"],
+      order: 2,
+    })
+    await ctx.db.insert("serviceRequirements", {
+      serviceId: svcSarl,
+      label: "Déclaration de non-condamnation",
+      description: "Signée par chaque dirigeant.",
+      required: true,
+      acceptedDocTypes: ["attestation"],
+      order: 3,
+    })
+
+    const svcEi = await ctx.db.insert("services", {
+      organismId: anpi,
+      categorySlug: "entreprise",
+      slug: "creation-entreprise-individuelle",
+      title: "Création d'une entreprise individuelle (EI)",
+      category: "Entreprise",
+      description:
+        "Statut le plus léger pour démarrer une activité commerciale. Aucun capital minimum, formalités simplifiées.",
+      legalReferences: ["Acte uniforme OHADA"],
+      whoCanApply: "Personnes physiques souhaitant entreprendre en nom propre.",
+      deliveryMode: "online",
+      online: true,
+      fee: "30 000 FCFA",
+      feeFcfa: 30000,
+      delayHours: 48,
+      status: "published",
+      satisfaction: 4.5,
+      requestsLast30d: 142,
+    })
+    await ctx.db.insert("serviceVariants", {
+      serviceId: svcEi,
+      key: "standard",
+      label: "Standard",
+      isDefault: true,
+      order: 0,
+    })
+    await ctx.db.insert("serviceRequirements", {
+      serviceId: svcEi,
+      label: "Pièce d'identité",
+      required: true,
+      acceptedDocTypes: ["cni", "passeport"],
+      autofillSource: "citizen_identity",
+      order: 0,
+    })
+    await ctx.db.insert("serviceRequirements", {
+      serviceId: svcEi,
+      label: "Justificatif de domicile",
+      required: true,
+      acceptedDocTypes: ["justif_domicile"],
+      order: 1,
+    })
+
+    /* ----- DGI — e-Tax ----- */
+
+    const svcETax = await ctx.db.insert("services", {
+      organismId: dgi,
+      categorySlug: "fiscalite",
+      slug: "teledeclaration-e-tax",
+      title: "Télédéclaration fiscale (e-Tax)",
+      category: "Fiscalité",
+      description:
+        "Dépôt en ligne des déclarations mensuelles (TVA, IRPP retenu) et annuelles. Plateforme accessible 24/7 via votre NIF.",
+      legalReferences: [
+        "Code Général des Impôts gabonais",
+        "Arrêté n° 0042/MEPPDD/SG/DGI du 18 mars 2022",
+      ],
+      whoCanApply:
+        "Entreprises assujetties à la TVA, à l'IRPP retenu, et professions libérales.",
+      deliveryMode: "online",
+      online: true,
+      fee: "Gratuit",
+      feeFcfa: 0,
+      delayHours: 1,
+      status: "published",
+      satisfaction: 3.9,
+      requestsLast30d: 1842,
+    })
+    await ctx.db.insert("serviceVariants", {
+      serviceId: svcETax,
+      key: "tva_mensuelle",
+      label: "TVA mensuelle",
+      description: "Dépôt avant le 20 du mois suivant.",
+      isDefault: true,
+      order: 0,
+    })
+    await ctx.db.insert("serviceVariants", {
+      serviceId: svcETax,
+      key: "irpp_annuelle",
+      label: "IRPP annuelle",
+      description: "Bilan à déposer avant le 31 mars.",
+      isDefault: false,
+      order: 1,
+    })
+
+    /* ----- CNAMGS — Consultation droits ----- */
+
+    const svcCnamgs = await ctx.db.insert("services", {
+      organismId: cnamgs,
+      categorySlug: "social",
+      slug: "consultation-droits-cnamgs",
+      title: "Consultation de vos droits CNAMGS",
+      category: "Famille & social",
+      description:
+        "Vérification en ligne de votre couverture maladie : statut d'affiliation, cotisations à jour, prestations consommées.",
+      legalReferences: ["Loi 2/95 du 14 janvier 1995 portant régime CNAMGS"],
+      whoCanApply:
+        "Assurés CNAMGS actifs ou inactifs disposant de leur numéro d'assuré.",
+      deliveryMode: "online",
+      online: true,
+      fee: "Gratuit",
+      feeFcfa: 0,
+      delayHours: 1,
+      status: "published",
+      satisfaction: 4.3,
+      requestsLast30d: 1218,
+    })
+    await ctx.db.insert("serviceVariants", {
+      serviceId: svcCnamgs,
+      key: "consultation_droits",
+      label: "Vérification des droits",
+      isDefault: true,
+      order: 0,
+    })
+    await ctx.db.insert("serviceVariants", {
+      serviceId: svcCnamgs,
+      key: "attestation_affiliation",
+      label: "Téléchargement d'attestation",
+      description: "PDF officiel à présenter en pharmacie ou hôpital.",
+      isDefault: false,
+      order: 1,
+    })
+
+    /* ----- Mairie de Libreville — Certificat de résidence ----- */
+
+    const svcResidence = await ctx.db.insert("services", {
+      organismId: mairieLbv,
+      categorySlug: "etat-civil",
+      slug: "certificat-residence",
+      title: "Certificat de résidence",
+      category: "État civil",
+      description:
+        "Atteste de votre domicile au Gabon. Exigé pour la CNI, le mariage, l'inscription scolaire et de nombreuses démarches.",
+      legalReferences: ["Loi 35/62 sur l'état civil — disposition réglementaire commune"],
+      whoCanApply: "Toute personne résidant à Libreville depuis au moins 3 mois.",
+      deliveryMode: "hybrid",
+      online: false,
+      fee: "1 500 FCFA",
+      feeFcfa: 1500,
+      delayHours: 24,
+      status: "published",
+      satisfaction: 4.1,
+      requestsLast30d: 762,
+    })
+    await ctx.db.insert("serviceVariants", {
+      serviceId: svcResidence,
+      key: "standard",
+      label: "Standard",
+      isDefault: true,
+      order: 0,
+    })
+    await ctx.db.insert("serviceRequirements", {
+      serviceId: svcResidence,
+      label: "Pièce d'identité",
+      required: true,
+      acceptedDocTypes: ["cni", "passeport"],
+      autofillSource: "citizen_identity",
+      order: 0,
+    })
+    await ctx.db.insert("serviceRequirements", {
+      serviceId: svcResidence,
+      label: "Justificatif de domicile",
+      description: "Facture SEEG, contrat de bail, attestation chef de quartier.",
+      required: true,
+      acceptedDocTypes: ["justif_domicile", "attestation"],
+      order: 1,
+    })
+
+    const svcLegalisation = await ctx.db.insert("services", {
+      organismId: mairieLbv,
+      categorySlug: "etat-civil",
+      slug: "legalisation-signature",
+      title: "Légalisation de signature",
+      category: "État civil",
+      description:
+        "Certification par la mairie qu'une signature apposée devant l'officier d'état civil est bien celle de la personne mentionnée.",
+      whoCanApply:
+        "Toute personne se présentant en personne avec une pièce d'identité valide.",
+      deliveryMode: "in_person",
+      online: false,
+      fee: "500 FCFA",
+      feeFcfa: 500,
+      delayHours: 1,
+      status: "published",
+      satisfaction: 4.8,
+      requestsLast30d: 412,
+    })
+    await ctx.db.insert("serviceVariants", {
+      serviceId: svcLegalisation,
+      key: "standard",
+      label: "Standard",
+      isDefault: true,
+      order: 0,
+    })
+    await ctx.db.insert("serviceRequirements", {
+      serviceId: svcLegalisation,
+      label: "Pièce d'identité originale",
+      required: true,
+      acceptedDocTypes: ["cni", "passeport"],
+      autofillSource: "citizen_identity",
+      order: 0,
+    })
+    await ctx.db.insert("serviceRequirements", {
+      serviceId: svcLegalisation,
+      label: "Document à légaliser",
+      description: "À présenter en original.",
+      required: true,
+      acceptedDocTypes: ["autre"],
+      order: 1,
+    })
+
+    void variantCniFirst
+    void variantCniRenew
+
+    // ════════════════════════════════════════════════════════
     // 6. Registre civil — acte source de Marie (ADR-0011)
     // ════════════════════════════════════════════════════════
     const registryMarie = await ctx.db.insert("registryEntries", {
@@ -1316,8 +1895,8 @@ export const reset = mutation({
       organisms: 12,
       agents: 6,
       citizens: 5,
-      services: 4,
-      serviceVariants: 3,
+      services: 16, // 4 EC publiés + 2 drafts EC + 3 DGDI + 1 Justice + 2 ANPI + 1 DGI + 1 CNAMGS + 2 Mairie LBV
+      serviceVariants: 21, // ≈ 3 acte + 1 chacun pour les services à variante unique + 2-3 pour les autres
       requests: 5,
       onboardingProcesses: 3,
       activities: 8,
