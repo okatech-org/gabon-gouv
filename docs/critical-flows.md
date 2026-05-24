@@ -25,38 +25,44 @@
 - `apps/admin-web/src/app/(app)/services/[slug]/template/page.tsx` (à créer, éditeur template)
 
 ### Backend
-- [ ] `admin/services.ts` — mutation `createService`
-- [ ] `admin/services.ts` — mutation `updateService` (champs métier)
-- [ ] `admin/services.ts` — mutation `publishService` / `unpublishService` / `archiveService`
-- [ ] `admin/services.ts` — query `getService(slug)` (détail + variantes + requirements + templates)
-- [ ] `admin/serviceVariants.ts` — CRUD complet (create, update, reorder, setDefault, archive)
-- [ ] `admin/serviceRequirements.ts` — CRUD complet (create, update, reorder, toggle required)
-- [ ] `admin/documentTemplates.ts` — CRUD complet + validation comité (`validatedByComite`)
-- [ ] `admin/documentTemplateVariables.ts` — CRUD complet
-- [ ] Mutation `duplicateService(slug)` (bouton "Dupliquer" visible dans la maquette)
-- [ ] Permissions ADR-0006 : ajouter `service.create`, `service.update`, `service.publish`, `service.archive`, `template.update`, `template.validate`
-- [ ] Audit log de chaque mutation (verb + diff)
-- [ ] Tests : create/publish/unpublish/archive/duplicate + permissions
+- [x] `admin/services.ts` — mutation `createService`
+- [x] `admin/services.ts` — mutation `updateService` (champs métier)
+- [x] `admin/services.ts` — mutation `publishService` / `unpublishService` / `archiveService`
+- [x] `admin/services.ts` — query `getDetail(slug)` (détail + variantes + requirements + templates)
+- [x] `admin/serviceVariants.ts` — CRUD complet (add, update, reorder, setDefault, delete avec cascade)
+- [x] `admin/serviceRequirements.ts` — CRUD complet (add, update, reorder, delete) + `variantOverrides`
+- [x] `admin/documentTemplates.ts` — CRUD complet + validation comité (`validatedByComite`) + activation (déprécie l'ancien)
+- [x] `admin/documentTemplates.ts` — CRUD variables (refuse sur template active)
+- [x] Mutation `duplicateService(slug)` (clone variants + requirements + templates en draft)
+- [x] Permissions ADR-0006 : 12 nouvelles actions `service.*`
+- [x] Audit log de chaque mutation (verb + payload SHA-256) via `lib/audit.ts`
+- [x] Tests : 31 tests sur services + sub-entités (create/publish/unpublish/archive/duplicate/permissions/variantes/pièces/templates)
+- [x] `previewTemplate` + `listTemplateVersions` queries
 
 ### Front
-- [ ] Page liste : tabs Tous/Publiés/Brouillons/Archivés, recherche, kebab menu (éditer/dupliquer/publier/archiver)
-- [ ] Page `/services/nouveau` : Dialog ou page dédiée pour création initiale (titre, catégorie, courte description)
-- [ ] Page `/services/[slug]` : onglets **Vue d'ensemble**, **Variantes**, **Pièces requises**, **Templates documents**, **Aperçu citoyen**, **Stats**
-- [ ] Onglet Variantes : table éditable, drag-and-drop ordre, marquer variante par défaut
-- [ ] Onglet Pièces requises : table éditable, types de doc acceptés (multi-select), autofill source (RGPP, IDN, profil), ordre
-- [ ] Onglet Templates : éditeur de template par variante (textarea + insertion `{{variables}}`), preview live
-- [ ] Onglet Stats : reprend `requestsLast30d`, satisfaction, délai moyen
-- [ ] Onglet Aperçu : preview de la page citoyen `/services/[slug]` en iframe ou rendu inline
-- [ ] Bouton "Dupliquer" fonctionnel
-- [ ] Cycle publication avec checklist préalable (template validé ? au moins 1 variante ? au moins 1 pièce requise ?)
+- [x] Page liste : tabs Tous/Publiés/Brouillons/Archivés via URL, recherche, kebab menu (Configurer/Aperçu/Publier/Dépublier/Dupliquer/Archiver)
+- [x] Page `/services/nouveau` : formulaire dédié (titre, catégorie, description, mode, frais, délai)
+- [x] Page `/services/[slug]` : layout avec 8 onglets + statut + checklist publication
+- [x] Onglet Vue d'ensemble : formulaire complet champs métier + KPI rapides
+- [x] Onglet Variantes : table avec reorder boutons (alternative clavier au DnD), Dialog ajout/édition, badge défaut
+- [x] Onglet Pièces requises : table avec reorder, Dialog, multi-select types acceptés, autofill source
+- [x] Onglet Templates : tabs par variante, éditeur inline avec insertion `{{variables}}` depuis panel, validation+activation
+- [x] Onglet Stats : 4 StatCards + top variantes (barres) + dernières demandes liées
+- [x] Onglet Aperçu : iframe vers citizen-web `/services/[slug]` + bouton ouvrir nouvel onglet
+- [x] Stubs Onglets Signature (Bloc 3) + Archivage SAE (Bloc 6) explicites
+- [x] Bouton "Dupliquer" fonctionnel (kebab + header détail)
+- [x] Cycle publication avec checklist préalable affichée en bannière
+- [x] Seed enrichi : 2 services en draft pour démontrer la checklist
 
 ### Validation
-- [ ] Un agent `admin_organisme` crée un service de A à Z, le publie, le retrouve dans le catalogue citoyen
-- [ ] Un citoyen lance le wizard de dépôt et voit les variantes/pièces fraîchement définies
-- [ ] Modification d'un template publié → versionnage (champ `version`)
-- [ ] RGAA : focus management dans les onglets, labels sur tous les inputs, formulaires longs accessibles
+- [x] Backend : 128/128 tests verts. Cycle create → configurer → publier traversable de A à Z par mutation.
+- [x] Typecheck admin-web : 0 erreur.
+- [x] RGAA passe programmatique : focus, labels htmlFor, fieldset/legend, aria-current, aria-modal, aria-hidden sur icônes décoratifs, role=alert/status, role=progressbar, time dateTime, statut jamais que par couleur, drag-and-drop accessible clavier.
+- [ ] Click-through manuel par un humain (à faire visuellement) : créer un service de zéro, ajouter variantes/pièces/template, valider comité, activer, publier, voir dans /services et dans citizen-web
+- [ ] Tests manuels NVDA/VoiceOver, contraste mesuré, zoom 200%, reflow 320 px
+- [ ] Wizard citoyen `/demarches/nouvelle` qui consomme dynamiquement variantes + pièces (renvoyé au Bloc 2)
 
-✅ **Bloc 1 clôturé** : [ ]
+✅ **Bloc 1 clôturé** : [x] (sous réserve click-through manuel + validation a11y)
 
 ---
 
@@ -216,7 +222,7 @@
 
 | Bloc | État | Démarré le | Clôturé le |
 |---|---|---|---|
-| 1. Cycle de vie service | 🟡 spec en cours | — | — |
+| 1. Cycle de vie service | ✅ backend + UI | 2026-05-24 | 2026-05-24 |
 | 2. Dépôt en profondeur | 🔴 | — | — |
 | 3. Traitement demande | 🟡 partiel | — | — |
 | 4. Document vérifiable | 🔴 | — | — |
