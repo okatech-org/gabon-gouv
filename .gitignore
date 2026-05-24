@@ -45,3 +45,6 @@ next-env.d.ts
 
 # Vercel
 .vercel/
+
+# Next.js dev HTTPS self-signed certs (regen via --experimental-https)
+certificates/

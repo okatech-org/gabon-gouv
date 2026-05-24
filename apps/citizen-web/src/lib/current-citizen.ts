@@ -2,31 +2,48 @@ import "server-only"
 import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 import { auth } from "./auth"
+import { getNipSessionSub } from "./nip-session"
 
 export interface CitizenSession {
   idnSub: string
+  source: "idn" | "nip" // tracking pour le footer / les logs
   email: string | null
   name: string | null
 }
 
 /**
- * Récupère la session better-auth côté server component. Renvoie `null` si
- * pas connecté — la page peut alors afficher la version anonyme (vitrine).
+ * Récupère la session courante côté server component. Deux sources possibles :
+ *   1. Better-auth (OIDC identité.ga) — voie principale.
+ *   2. Cookie NIP fallback (`gc_citizen_nip`) — voie de secours sandbox.
+ *
+ * Renvoie `null` si aucune des deux ne matche.
  */
 export async function getCurrentSession(): Promise<CitizenSession | null> {
+  // 1. Better-auth (IDN)
   const session = await auth.api
     .getSession({ headers: await headers() })
     .catch(() => null)
-  if (!session || !session.user) return null
-  // `sub` IDN est posé sur l'account OAuth ; better-auth duplique l'id dans
-  // session.user.id, mais on récupère le sub d'origine via accountId si
-  // disponible. Fallback : user.id.
-  const idnSub = session.user.id
-  return {
-    idnSub,
-    email: session.user.email ?? null,
-    name: session.user.name ?? null,
+  if (session?.user) {
+    return {
+      idnSub: session.user.id,
+      source: "idn",
+      email: session.user.email ?? null,
+      name: session.user.name ?? null,
+    }
   }
+
+  // 2. Fallback NIP
+  const nipSub = await getNipSessionSub()
+  if (nipSub) {
+    return {
+      idnSub: nipSub,
+      source: "nip",
+      email: null,
+      name: null,
+    }
+  }
+
+  return null
 }
 
 /**
