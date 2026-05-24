@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation"
 import {
   Badge,
   Icon,
@@ -12,10 +11,20 @@ import {
 } from "@workspace/ui"
 import { api } from "@workspace/backend/generated"
 import { convex } from "@/lib/convex"
-import { getCurrentAgent } from "@/lib/current-agent"
+import { requireCurrentAgent } from "@/lib/current-agent"
 
 interface Props {
-  params: Promise<{ slug: string }>
+  slug: string
+  requests30d: number
+  variantsCount: number
+  requirementsCount: number
+  satisfaction: number | null
+  topVariants: {
+    id: string
+    label: string
+    isDefault: boolean
+    requestsLast30d: number
+  }[]
 }
 
 function statusTone(s: string): Tone {
@@ -46,28 +55,27 @@ function statusLabel(s: string): string {
   return map[s] ?? s
 }
 
-export default async function StatsPage({ params }: Props) {
-  const session = await getCurrentAgent()
-  if (!session) redirect("/login")
-  const { slug } = await params
-
-  const [detail, relatedRequests] = await Promise.all([
-    convex.query(api.admin.services.getDetail, {
-      token: session.token,
-      slug,
-    }),
-    convex.query(api.admin.services.listRelatedRequests, {
+export async function StatsPanel({
+  slug,
+  requests30d,
+  variantsCount,
+  requirementsCount,
+  satisfaction,
+  topVariants,
+}: Props) {
+  const session = await requireCurrentAgent()
+  const relatedRequests = await convex.query(
+    api.admin.services.listRelatedRequests,
+    {
       token: session.token,
       slug,
       limit: 10,
-    }),
-  ])
-  if (!detail) redirect("/services")
+    },
+  )
 
-  // Top variantes par demandes 30j
-  const topVariants = [...detail.variants]
-    .sort((a, b) => b.requestsLast30d - a.requestsLast30d)
-    .slice(0, 5)
+  const sortedVariants = [...topVariants].sort(
+    (a, b) => b.requestsLast30d - a.requestsLast30d,
+  )
 
   return (
     <div
@@ -97,34 +105,33 @@ export default async function StatsPage({ params }: Props) {
       >
         <StatCard
           label="Demandes 30 jours"
-          value={String(detail.requests30d)}
+          value={String(requests30d)}
           icon="inbox"
         />
         <StatCard
           label="Variantes actives"
-          value={String(detail.variants.length)}
+          value={String(variantsCount)}
           icon="layers"
         />
         <StatCard
           label="Pièces requises"
-          value={String(detail.requirements.length)}
+          value={String(requirementsCount)}
           icon="paperclip"
         />
         <StatCard
           label="Satisfaction"
           value={
-            typeof detail.satisfaction === "number"
-              ? `${detail.satisfaction.toFixed(1).replace(".", ",")}/5`
+            typeof satisfaction === "number"
+              ? `${satisfaction.toFixed(1).replace(".", ",")}/5`
               : "—"
           }
           icon="star"
         />
       </div>
 
-      {/* Top variantes */}
       <div>
         <SectionHeading title="Top variantes (30 jours)" level={3} />
-        {topVariants.length === 0 || topVariants.every((v) => v.requestsLast30d === 0) ? (
+        {sortedVariants.every((v) => v.requestsLast30d === 0) ? (
           <p style={{ fontSize: 13, color: "var(--ink-600)" }}>
             Aucune demande sur les 30 derniers jours.
           </p>
@@ -139,11 +146,8 @@ export default async function StatsPage({ params }: Props) {
               gap: 8,
             }}
           >
-            {topVariants.map((v) => {
-              const max = Math.max(
-                ...topVariants.map((x) => x.requestsLast30d),
-                1,
-              )
+            {sortedVariants.slice(0, 5).map((v) => {
+              const max = Math.max(...sortedVariants.map((x) => x.requestsLast30d), 1)
               const pct = Math.round((v.requestsLast30d / max) * 100)
               return (
                 <li
@@ -166,11 +170,7 @@ export default async function StatsPage({ params }: Props) {
                     <span style={{ fontWeight: 600, fontSize: 14 }}>
                       {v.label}
                       {v.isDefault && (
-                        <Badge
-                          tone="primary"
-                          size="sm"
-                          style={{ marginLeft: 8 }}
-                        >
+                        <Badge tone="primary" size="sm" style={{ marginLeft: 8 }}>
                           Défaut
                         </Badge>
                       )}
@@ -212,7 +212,6 @@ export default async function StatsPage({ params }: Props) {
         )}
       </div>
 
-      {/* Dernières demandes */}
       <div>
         <SectionHeading title="Dernières demandes" level={3} />
         {relatedRequests.length === 0 ? (
