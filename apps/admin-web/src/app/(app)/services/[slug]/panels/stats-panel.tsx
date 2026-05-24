@@ -1,3 +1,5 @@
+"use client"
+
 import {
   Badge,
   Icon,
@@ -9,22 +11,28 @@ import {
   Tr,
   type Tone,
 } from "@workspace/ui"
-import { api } from "@workspace/backend/generated"
-import { convex } from "@/lib/convex"
-import { requireCurrentAgent } from "@/lib/current-agent"
+
+interface Variant {
+  id: string
+  label: string
+  isDefault: boolean
+  requestsLast30d: number
+}
+
+interface RelatedRequest {
+  ref: string
+  status: string
+  depositedAt: number
+  progressPct: number
+}
 
 interface Props {
-  slug: string
   requests30d: number
   variantsCount: number
   requirementsCount: number
   satisfaction: number | null
-  topVariants: {
-    id: string
-    label: string
-    isDefault: boolean
-    requestsLast30d: number
-  }[]
+  topVariants: Variant[]
+  relatedRequests: RelatedRequest[]
 }
 
 function statusTone(s: string): Tone {
@@ -55,24 +63,14 @@ function statusLabel(s: string): string {
   return map[s] ?? s
 }
 
-export async function StatsPanel({
-  slug,
+export function StatsPanel({
   requests30d,
   variantsCount,
   requirementsCount,
   satisfaction,
   topVariants,
+  relatedRequests,
 }: Props) {
-  const session = await requireCurrentAgent()
-  const relatedRequests = await convex.query(
-    api.admin.services.listRelatedRequests,
-    {
-      token: session.token,
-      slug,
-      limit: 10,
-    },
-  )
-
   const sortedVariants = [...topVariants].sort(
     (a, b) => b.requestsLast30d - a.requestsLast30d,
   )
@@ -147,7 +145,10 @@ export async function StatsPanel({
             }}
           >
             {sortedVariants.slice(0, 5).map((v) => {
-              const max = Math.max(...sortedVariants.map((x) => x.requestsLast30d), 1)
+              const max = Math.max(
+                ...sortedVariants.map((x) => x.requestsLast30d),
+                1,
+              )
               const pct = Math.round((v.requestsLast30d / max) * 100)
               return (
                 <li
@@ -170,7 +171,11 @@ export async function StatsPanel({
                     <span style={{ fontWeight: 600, fontSize: 14 }}>
                       {v.label}
                       {v.isDefault && (
-                        <Badge tone="primary" size="sm" style={{ marginLeft: 8 }}>
+                        <Badge
+                          tone="primary"
+                          size="sm"
+                          style={{ marginLeft: 8 }}
+                        >
                           Défaut
                         </Badge>
                       )}
