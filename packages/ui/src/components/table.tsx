@@ -22,11 +22,20 @@ export interface ThProps {
   children?: ReactNode
   sortable?: boolean
   align?: "left" | "center" | "right"
+  /** Portée d'en-tête a11y (RGAA / WCAG) : "col" (par défaut), "row", "colgroup", "rowgroup". */
+  scope?: "col" | "row" | "colgroup" | "rowgroup"
   style?: CSSProperties
 }
 
-export const Th = ({ children, sortable, align = "left", style }: ThProps) => (
+export const Th = ({
+  children,
+  sortable,
+  align = "left",
+  scope = "col",
+  style,
+}: ThProps) => (
   <th
+    scope={scope}
     style={{
       textAlign: align,
       padding: "10px 12px",

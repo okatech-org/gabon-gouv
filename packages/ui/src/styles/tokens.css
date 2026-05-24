@@ -205,3 +205,18 @@ select {
 ::-webkit-scrollbar-corner {
   background: transparent;
 }
+
+/* Accessibilité — texte réservé aux lecteurs d'écran (RGAA 4.1.2 / WCAG 2.1).
+   À utiliser pour donner un libellé à des contrôles purement visuels
+   (icônes, badges, légendes de table…) sans le rendre visible à l'écran. */
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}

@@ -13,6 +13,94 @@ import { assertCan } from "../lib/permissions"
  * "request.deposit"/"request.cancel")`.
  */
 
+/**
+ * Liste de toutes les demandes du citoyen, triées récentes en premier.
+ * Sert la page /mon-espace/demarches (vue liste).
+ */
+export const listMyRequests = query({
+  args: { idnSub: v.string() },
+  handler: async (ctx, { idnSub }) => {
+    const { citizen } = await requireCitizen(ctx, idnSub)
+    const requests = await ctx.db
+      .query("requests")
+      .withIndex("by_citizen", (q) => q.eq("citizenId", citizen._id))
+      .collect()
+    requests.sort((a, b) => b.depositedAt - a.depositedAt)
+
+    const services = await Promise.all(
+      requests.map((r) => ctx.db.get(r.serviceId)),
+    )
+    const variants = await Promise.all(
+      requests.map((r) =>
+        r.serviceVariantId
+          ? ctx.db.get(r.serviceVariantId)
+          : Promise.resolve(null),
+      ),
+    )
+    const orgs = await Promise.all(requests.map((r) => ctx.db.get(r.organismId)))
+
+    // Compteur de messages non lus + pièces requises en attente
+    const enriched = await Promise.all(
+      requests.map(async (r, i) => {
+        const service = services[i]
+        const variant = variants[i]
+        const org = orgs[i]
+        const pieces = await ctx.db
+          .query("pieces")
+          .withIndex("by_request_status", (q) =>
+            q.eq("requestId", r._id).eq("status", "missing"),
+          )
+          .collect()
+        const messages = await ctx.db
+          .query("requestMessages")
+          .withIndex("by_request_time", (q) => q.eq("requestId", r._id))
+          .collect()
+        // « Non lu » pour le citoyen = message du kind=agent dont
+        // readAtByCounterparty est undefined.
+        const unreadFromAgent = messages.filter(
+          (m) => m.fromKind === "agent" && m.readAtByCounterparty === undefined,
+        ).length
+        const { label, tone } = statusLabel(r.status)
+        const title = service
+          ? variant
+            ? `${service.title} · ${variant.label}`
+            : service.title
+          : "Service inconnu"
+        return {
+          id: r._id,
+          ref: r.ref,
+          title,
+          category: service?.category ?? "—",
+          org: org?.shortName ?? org?.name ?? "—",
+          depositedAt: formatDateLong(r.depositedAt),
+          depositedAtMs: r.depositedAt,
+          status: label,
+          rawStatus: r.status,
+          tone,
+          progress: r.progressPct,
+          dueAt: r.dueAt,
+          urgent: Boolean(r.urgent),
+          missingPiecesCount: pieces.length,
+          unreadFromAgent,
+        }
+      }),
+    )
+
+    // Stats globales pour les filtres en tête de page
+    const stats = {
+      total: enriched.length,
+      inProgress: enriched.filter((r) =>
+        ["submitted", "in_instruction", "waiting_pieces", "waiting_registry", "prepared", "to_sign"].includes(r.rawStatus),
+      ).length,
+      issued: enriched.filter((r) => r.rawStatus === "issued").length,
+      rejected: enriched.filter((r) => r.rawStatus === "rejected").length,
+      cancelled: enriched.filter((r) => r.rawStatus === "cancelled").length,
+      waitingPieces: enriched.filter((r) => r.missingPiecesCount > 0).length,
+    }
+    return { requests: enriched, stats }
+  },
+})
+
 export const getMyRequest = query({
   args: { idnSub: v.string(), ref: v.string() },
   handler: async (ctx, { idnSub, ref }) => {

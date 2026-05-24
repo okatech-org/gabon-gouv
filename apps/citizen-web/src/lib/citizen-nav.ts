@@ -17,14 +17,14 @@ export const buildCitizenNav = ({
     label: "Mes demandes",
     icon: "inbox",
     count: requestsInProgress,
-    href: "/mon-espace/demarches/GC-2026-EC-002841",
+    href: "/mon-espace/demarches",
   },
   {
     id: "documents",
     label: "Mes documents",
     icon: "fileText",
     count: documentsReceived,
-    href: "/mon-espace/documents/EC-LBV-2026-04812",
+    href: "/mon-espace/documents",
   },
   { id: "dossier", label: "Mon dossier", icon: "folder", href: "/mon-espace/dossier" },
   {

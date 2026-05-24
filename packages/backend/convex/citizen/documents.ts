@@ -3,8 +3,61 @@ import { query } from "../_generated/server"
 import { requireCitizen } from "./auth"
 
 /**
- * Documents reçus (vue citoyen) — détail d'un document signé/émis.
+ * Documents reçus (vue citoyen) — détail d'un document signé/émis et
+ * liste agrégée pour la page /mon-espace/documents.
  */
+
+export const listMyDocuments = query({
+  args: { idnSub: v.string() },
+  handler: async (ctx, { idnSub }) => {
+    const { citizen } = await requireCitizen(ctx, idnSub)
+    const docs = await ctx.db
+      .query("documents")
+      .withIndex("by_citizen", (q) => q.eq("citizenId", citizen._id))
+      .collect()
+    docs.sort((a, b) => b.issuedAt - a.issuedAt)
+
+    const orgs = await Promise.all(docs.map((d) => ctx.db.get(d.organismId)))
+    const requests = await Promise.all(
+      docs.map((d) => ctx.db.get(d.requestId)),
+    )
+
+    const enriched = docs.map((d, i) => {
+      const org = orgs[i]
+      const year = new Date(d.issuedAt).getFullYear()
+      return {
+        id: d._id,
+        actNumber: d.actNumber,
+        title: d.title,
+        org: org?.shortName ?? org?.name ?? "—",
+        issuedAt: formatDateLong(d.issuedAt),
+        issuedAtMs: d.issuedAt,
+        year,
+        status: d.status ?? "issued",
+        revoked: Boolean(d.revokedAt),
+        verificationCode: d.verificationCode ?? d.qrCode,
+        requestRef: requests[i]?.ref,
+        sha256Short: `${d.sha256.slice(0, 8)}…${d.sha256.slice(-4)}`,
+      }
+    })
+
+    // Facettes pour filtres en tête : par année + par organisme
+    const yearsSet = new Set(enriched.map((d) => d.year))
+    const orgsSet = new Set(enriched.map((d) => d.org))
+    return {
+      documents: enriched,
+      stats: {
+        total: enriched.length,
+        active: enriched.filter((d) => !d.revoked).length,
+        revoked: enriched.filter((d) => d.revoked).length,
+      },
+      facets: {
+        years: [...yearsSet].sort((a, b) => b - a),
+        organisms: [...orgsSet].sort(),
+      },
+    }
+  },
+})
 
 export const getMyDocument = query({
   args: { idnSub: v.string(), actNumber: v.string() },

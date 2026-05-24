@@ -26,11 +26,17 @@ export default async function CitizenSpaceLayout({
   // Si le sub IDN n'est lié à aucun compte, on renvoie sur /login avec un
   // bandeau "compte non provisionné".
   let displayName: string
+  let counts = { requestsInProgress: 0, documentsReceived: 0, unreadMessages: 0 }
   try {
     const dashboard = await convex.query(api.citizen.dashboard.getDashboard, {
       idnSub: session.idnSub,
     })
     displayName = dashboard.profile.name
+    counts = {
+      requestsInProgress: dashboard.stats.inProgress,
+      documentsReceived: dashboard.stats.documentsReceived,
+      unreadMessages: dashboard.messages.filter((m) => m.unread).length,
+    }
   } catch (error) {
     const msg = error instanceof Error ? error.message : ""
     if (msg.includes("provisionn")) {
@@ -38,7 +44,7 @@ export default async function CitizenSpaceLayout({
     }
     throw error
   }
-  const navItems = buildCitizenNav()
+  const navItems = buildCitizenNav(counts)
 
   return (
     <>
