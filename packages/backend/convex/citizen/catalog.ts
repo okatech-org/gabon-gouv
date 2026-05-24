@@ -1,5 +1,6 @@
 import { v } from "convex/values"
 import { query } from "../_generated/server"
+import { requireCitizen } from "./auth"
 
 /**
  * Catalogue de services (vue citoyen) — toutes les queries sont publiques
@@ -143,6 +144,142 @@ export const getServiceDetail = query({
 })
 
 void TOP_SERVICES_HARDCODED_FALLBACK
+
+/**
+ * Query dédiée au wizard de dépôt : renvoie le service avec ses variantes
+ * publiées, ses pièces requises (avec variantOverrides résolus par variante),
+ * et les valeurs d'autofill pré-calculées depuis le profil du citoyen courant.
+ *
+ * Nécessite l'authentification citoyen (idnSub) — contrairement à
+ * getServiceDetail qui est public — parce qu'on injecte des données personnelles.
+ */
+export const getServiceForWizard = query({
+  args: { idnSub: v.string(), slug: v.string() },
+  handler: async (ctx, { idnSub, slug }) => {
+    const { citizen } = await requireCitizen(ctx, idnSub)
+
+    const service = await ctx.db
+      .query("services")
+      .withIndex("by_slug", (q) => q.eq("slug", slug))
+      .first()
+    if (!service) return null
+    if (service.status !== "published") {
+      throw new Error(
+        "Ce service n'est plus disponible (brouillon ou archivé).",
+      )
+    }
+
+    const [organism, variants, requirements] = await Promise.all([
+      ctx.db.get(service.organismId),
+      ctx.db
+        .query("serviceVariants")
+        .withIndex("by_service", (q) => q.eq("serviceId", service._id))
+        .collect(),
+      ctx.db
+        .query("serviceRequirements")
+        .withIndex("by_service", (q) => q.eq("serviceId", service._id))
+        .collect(),
+    ])
+    variants.sort((a, b) => a.order - b.order)
+    requirements.sort((a, b) => a.order - b.order)
+
+    // Pré-calcul de l'autofill : champs déjà connus depuis le citoyen courant
+    // (et son IDN sub). À enrichir quand on aura les claims IDN persistés.
+    const autofillValues = resolveAutofillValues(citizen)
+
+    return {
+      service: {
+        id: service._id,
+        slug: service.slug,
+        title: service.title,
+        category: service.category,
+        organism: organism?.shortName ?? organism?.name ?? "—",
+        organismId: service.organismId,
+        delayHours: service.delayHours,
+        fee: service.fee,
+        feeFcfa: service.feeFcfa ?? 0,
+        deliveryMode: service.deliveryMode ?? "online",
+        legalReferences: service.legalReferences ?? [],
+        whoCanApply: service.whoCanApply ?? "",
+      },
+      variants: variants.map((vv) => ({
+        id: vv._id,
+        key: vv.key,
+        label: vv.label,
+        description: vv.description ?? "",
+        whoCanApply: vv.whoCanApply ?? "",
+        isDefault: vv.isDefault,
+        // overrides effectifs pour affichage
+        feeOverride: vv.feeOverride ?? null,
+        feeFcfaOverride: vv.feeFcfaOverride ?? null,
+        delayHoursOverride: vv.delayHoursOverride ?? null,
+      })),
+      requirements: requirements.map((r) => ({
+        id: r._id,
+        label: r.label,
+        description: r.description ?? "",
+        // Règle générale
+        required: r.required,
+        acceptedDocTypes: r.acceptedDocTypes,
+        autofillSource: r.autofillSource ?? "none",
+        // Map des overrides par variante : pour que le front puisse filtrer
+        // côté UI en fonction de la variante sélectionnée
+        variantOverrides: r.variantOverrides ?? [],
+      })),
+      autofillValues,
+    }
+  },
+})
+
+/**
+ * Renvoie les valeurs disponibles dans le profil citoyen pour pré-remplir
+ * les champs identifiables d'une demande. Lit le doc citoyen.
+ * Les sources "third_party_api" et "previous_request" sont aujourd'hui stubs.
+ */
+function resolveAutofillValues(citizen: {
+  name: string
+  nip: string
+  email?: string
+  phone?: string
+  birthDate?: string
+  birthPlace?: string
+  birthProvinceCode?: string
+  address?: string
+  addressProvinceCode?: string
+  fatherName?: string
+  motherName?: string
+}) {
+  return {
+    // identité de base (toujours présente)
+    nom: extractLastName(citizen.name),
+    prenoms: extractFirstNames(citizen.name),
+    nip: citizen.nip,
+    // contact
+    email: citizen.email ?? "",
+    telephone: citizen.phone ?? "",
+    // état civil étendu (depuis le seed ou IDN)
+    date_naissance: citizen.birthDate ?? "",
+    lieu_naissance: citizen.birthPlace ?? "",
+    province_naissance: citizen.birthProvinceCode ?? "",
+    adresse: citizen.address ?? "",
+    province_residence: citizen.addressProvinceCode ?? "",
+    pere: citizen.fatherName ?? "",
+    mere: citizen.motherName ?? "",
+  }
+}
+
+function extractLastName(fullName: string): string {
+  // Convention seed : "NOM Prénom1 Prénom2" — le nom est en majuscules
+  const tokens = fullName.trim().split(/\s+/)
+  const upperOnly = tokens.filter((t) => t === t.toUpperCase() && t.length > 1)
+  return upperOnly.length > 0 ? upperOnly.join(" ") : tokens[0] ?? ""
+}
+
+function extractFirstNames(fullName: string): string {
+  const tokens = fullName.trim().split(/\s+/)
+  const firsts = tokens.filter((t) => t !== t.toUpperCase() || t.length <= 1)
+  return firsts.join(" ")
+}
 
 function formatDelayHours(hours: number): string {
   if (hours < 24) return `${Math.round(hours)} h`

@@ -28,6 +28,7 @@ import type * as citizen_dashboard from "../citizen/dashboard.js";
 import type * as citizen_directory from "../citizen/directory.js";
 import type * as citizen_documents from "../citizen/documents.js";
 import type * as citizen_dossier from "../citizen/dossier.js";
+import type * as citizen_drafts from "../citizen/drafts.js";
 import type * as citizen_home from "../citizen/home.js";
 import type * as citizen_identity from "../citizen/identity.js";
 import type * as citizen_messages from "../citizen/messages.js";
@@ -88,6 +89,7 @@ declare const fullApi: ApiFromModules<{
   "citizen/directory": typeof citizen_directory;
   "citizen/documents": typeof citizen_documents;
   "citizen/dossier": typeof citizen_dossier;
+  "citizen/drafts": typeof citizen_drafts;
   "citizen/home": typeof citizen_home;
   "citizen/identity": typeof citizen_identity;
   "citizen/messages": typeof citizen_messages;

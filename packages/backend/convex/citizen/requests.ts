@@ -187,7 +187,15 @@ export const submitRequest = mutation({
     variantKey: v.optional(v.string()),
     numberOfCopies: v.optional(v.number()),
     recipientEmail: v.optional(v.string()),
-    beneficiaryKind: v.optional(v.union(v.literal("self"), v.literal("third_party"))),
+    beneficiaryKind: v.optional(
+      v.union(v.literal("self"), v.literal("third_party")),
+    ),
+    urgent: v.optional(v.boolean()),
+    /** Payload structuré (réponses du wizard, données ad-hoc). */
+    payload: v.optional(v.any()),
+    /** IDs des pièces déjà uploadées via attachPiece (transformées en
+        pièces définitives liées à la demande). */
+    attachedPieceIds: v.optional(v.array(v.id("pieces"))),
     consents: v.object({
       honor: v.boolean(),
       rgpd: v.boolean(),
@@ -200,6 +208,11 @@ export const submitRequest = mutation({
     if (!args.consents.honor || !args.consents.rgpd) {
       throw new Error(
         "Vous devez accepter la déclaration sur l'honneur et le traitement RGPD.",
+      )
+    }
+    if (args.urgent && (!args.payload || !args.payload.urgentReason)) {
+      throw new Error(
+        "Justifiez l'urgence dans le champ « motif » avant de marquer la demande urgente.",
       )
     }
 
@@ -246,12 +259,27 @@ export const submitRequest = mutation({
       numberOfCopies: args.numberOfCopies,
       recipientEmail: args.recipientEmail ?? citizen.email,
       beneficiaryKind: args.beneficiaryKind ?? "self",
+      urgent: args.urgent ?? false,
+      payload: args.payload,
       consents: {
         honor: args.consents.honor,
         rgpd: args.consents.rgpd,
         consentedAt: now,
       },
     })
+
+    // Rattache les pièces uploadées en amont (via attachPiece) à la demande
+    if (args.attachedPieceIds && args.attachedPieceIds.length > 0) {
+      for (const pieceId of args.attachedPieceIds) {
+        const piece = await ctx.db.get(pieceId)
+        if (!piece) continue
+        // Pour l'instant les pièces uploadées avant submit sont posées avec
+        // requestId = sentinel ; on les remappe ici.
+        // Vérification d'ownership : la pièce doit avoir été créée par un
+        // uploader rattaché au même citoyen (vérifié par attachPiece).
+        await ctx.db.patch(pieceId, { requestId })
+      }
+    }
 
     await ctx.db.insert("requestEvents", {
       requestId,
@@ -269,6 +297,18 @@ export const submitRequest = mutation({
       actor: "Système",
       occurredAt: now + 1000,
     })
+
+    // Supprime le brouillon associé (si existant) — un seul brouillon par
+    // (citizen, service) selon la convention de drafts.ts
+    const drafts = await ctx.db
+      .query("requestDrafts")
+      .withIndex("by_citizen", (q) => q.eq("citizenId", citizen._id))
+      .collect()
+    for (const draft of drafts) {
+      if (draft.serviceId === service._id) {
+        await ctx.db.delete(draft._id)
+      }
+    }
 
     return { ref, requestId }
   },
