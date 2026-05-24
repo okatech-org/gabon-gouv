@@ -1,4 +1,5 @@
 import "server-only"
+import { redirect } from "next/navigation"
 import { api } from "@workspace/backend/generated"
 import { convex } from "./convex"
 import { getSessionToken } from "./session"
@@ -29,4 +30,16 @@ export async function getCurrentAgent(): Promise<{ token: string; agent: Current
     console.error("[admin-web] currentAgent error", error)
     return null
   }
+}
+
+/**
+ * Variante stricte pour server actions : redirige vers /login si pas de session.
+ */
+export async function requireCurrentAgent(): Promise<{
+  token: string
+  agent: CurrentAgent
+}> {
+  const session = await getCurrentAgent()
+  if (!session) redirect("/login")
+  return session
 }

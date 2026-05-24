@@ -588,6 +588,73 @@ export const reset = mutation({
       requestsLast30d: 26,
     })
 
+    // — Services en DRAFT pour démontrer la checklist de publication (Bloc 1)
+    // Le 1er n'a que les métadonnées (pas de variante, pas de pièce, pas de
+    // template) : checklist majoritairement vide. Permet à l'agent de tester
+    // la chaîne create → configurer → publier.
+    await ctx.db.insert("services", {
+      organismId: dgEtatCivil,
+      categorySlug: "etat-civil",
+      slug: "transcription-acte-etranger",
+      title: "Transcription d'acte étranger",
+      category: "État civil",
+      description:
+        "Transcription dans les registres gabonais d'un acte d'état civil établi à l'étranger.",
+      whoCanApply: "Citoyens gabonais ayant un acte étranger à faire reconnaître.",
+      fee: "5 000 FCFA",
+      feeFcfa: 5000,
+      delayHours: 168,
+      status: "draft",
+      deliveryMode: "hybrid",
+      online: true,
+    })
+
+    // Le 2e a tout sauf le template validé par comité — case d'usage proche
+    // de la mise en prod : « tout est prêt sauf le tampon comité ».
+    const svcRectification = await ctx.db.insert("services", {
+      organismId: dgEtatCivil,
+      categorySlug: "etat-civil",
+      slug: "rectification-acte",
+      title: "Rectification d'acte",
+      category: "État civil",
+      description:
+        "Correction d'une erreur matérielle dans un acte d'état civil (orthographe, date, lieu).",
+      whoCanApply: "Le titulaire de l'acte ou son représentant légal.",
+      fee: "2 500 FCFA",
+      feeFcfa: 2500,
+      delayHours: 240,
+      status: "draft",
+      deliveryMode: "online",
+      online: true,
+    })
+    const variantRectif = await ctx.db.insert("serviceVariants", {
+      serviceId: svcRectification,
+      key: "standard",
+      label: "Standard",
+      isDefault: true,
+      order: 0,
+    })
+    await ctx.db.insert("serviceRequirements", {
+      serviceId: svcRectification,
+      label: "Justificatif de l'erreur",
+      description:
+        "Document officiel attestant de l'orthographe correcte (CNI, passeport, livret).",
+      required: true,
+      acceptedDocTypes: ["cni", "passeport", "livret_famille"],
+      autofillSource: "none",
+      order: 0,
+    })
+    await ctx.db.insert("documentTemplates", {
+      serviceVariantId: variantRectif,
+      key: "ordonnance-rectification",
+      version: "v1",
+      title: "Ordonnance de rectification",
+      bodyTemplate:
+        "RÉPUBLIQUE GABONAISE — Union · Travail · Justice\n\nORDONNANCE DE RECTIFICATION D'ACTE\n\nVu la demande de {{nom}} {{prenoms}}…",
+      status: "draft", // pas active → checklist signalera « pas de template actif »
+      validatedByComite: false, // case décoché → un autre point à vérifier
+    })
+
     // Pièces requises pour l'acte de naissance
     await ctx.db.insert("serviceRequirements", {
       serviceId: svcActe,
