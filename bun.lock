@@ -41,7 +41,7 @@
       "name": "citizen-web",
       "version": "0.0.1",
       "dependencies": {
-        "@idn-ga/better-auth": "^0.1.0",
+        "@idn-ga/better-auth": "^0.2.0",
         "@workspace/backend": "workspace:*",
         "@workspace/mocks": "workspace:*",
         "@workspace/ui": "workspace:*",
@@ -246,7 +246,7 @@
 
     "@exodus/bytes": ["@exodus/bytes@1.15.1", "", { "peerDependencies": { "@noble/hashes": "^1.8.0 || ^2.0.0" }, "optionalPeers": ["@noble/hashes"] }, "sha512-S6mL0yNB/Abt9Ei4tq8gDhcczc4S3+vQ4ra7vxnAf+YHC02srtqxKKZghx2Dq6p0e66THKwR6r8N6P95wEty7Q=="],
 
-    "@idn-ga/better-auth": ["@idn-ga/better-auth@0.1.1", "", { "peerDependencies": { "better-auth": "^1.4.0" } }, "sha512-qFIlkZ14tUvxzDkCjOdDxmQUgTNApD2A7Ximg6EA2iG0asCK6RGuwUvMKQj0Dh34v6NEMaEh1Kmj8QtL21YWIg=="],
+    "@idn-ga/better-auth": ["@idn-ga/better-auth@0.2.0", "", { "peerDependencies": { "better-auth": "^1.4.0" } }, "sha512-d28My63Kr7eKB8InD+3bnodigzC/vH05utfDMypKRS5yYh8xehtNBTjz+lEQd/kDuz98qHfeMnAEPV92gmufHA=="],
 
     "@img/colour": ["@img/colour@1.1.0", "", {}, "sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ=="],
 
