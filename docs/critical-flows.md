@@ -71,31 +71,39 @@
 **Entités** : `requestDrafts`, `requests`, `pieces`, `serviceVariants`, `serviceRequirements`
 
 ### Backend
-- [ ] `citizen/requests.ts` — mutation `saveDraft` (autosave wizard, throttle 2s)
-- [ ] `citizen/requests.ts` — mutation `discardDraft`
-- [ ] `citizen/requests.ts` — query `getMyDraft(serviceId)` (reprise wizard)
-- [ ] `citizen/requests.ts` — query `listMyDrafts` (page "Mes brouillons" ?)
-- [ ] HTTP action `generateUploadUrl` (Convex storage) pour upload réel
-- [ ] Mutation `attachPiece` après upload (lie storageKey à `pieces.requestId`)
-- [ ] OCR + détection type doc : intégration ou stub avec `detectedDocType` + `ocrConfidence`
-- [ ] Autofill RGPP : helper qui lit `requirementAutofillSource` et pré-remplit depuis profil citoyen / IDN claims
+- [x] `citizen/drafts.ts` — mutation `saveDraft` (autosave wizard, upsert idempotent)
+- [x] `citizen/drafts.ts` — mutation `discardDraft`
+- [x] `citizen/drafts.ts` — query `getMyDraft(serviceSlug)` (reprise wizard)
+- [x] `citizen/drafts.ts` — query `listMyDrafts` (page "Mes brouillons" future)
+- [x] `citizen/uploads.ts` — mutation `generateUploadUrl` (Convex storage)
+- [x] `citizen/uploads.ts` — mutation `attachPiece` (création piece orpheline)
+- [x] `citizen/uploads.ts` — mutation `removePiece` (annulation avant submit)
+- [x] Schema delta : `pieces.requestId` optional + `citizenId` + `requirementId`
+- [ ] OCR + détection type doc : intégration ou stub avec `detectedDocType` + `ocrConfidence` (reporté)
+- [x] Autofill RGPP : helper `resolveAutofillValues` dans citizen/catalog.ts (lit profil citoyen, stubs documentés pour third_party_api)
+- [x] Query `getServiceForWizard` (auth + variantes + requirements + autofill)
+- [x] Mutation `submitRequest` enrichie : urgent, payload, attachedPieceIds, conversion draft → request
 
 ### Front
-- [ ] Wizard : sélection variante dynamique (depuis `serviceVariants`)
-- [ ] Wizard : étape pièces dynamique (depuis `serviceRequirements` du service+variante)
-- [ ] Wizard : upload réel via Convex storage (drag-and-drop + preview + suppression + progress bar)
-- [ ] Wizard : autosave brouillon (badge "Brouillon · sauvegardé automatiquement" de la maquette)
-- [ ] Reprise du brouillon depuis `/mon-espace/demarches/nouvelle?reprise=draftId`
-- [ ] Champs : nombre de copies, email de notification, beneficiary kind, urgent + justification
-- [ ] Consentements snapshot (honneur + RGPD) capturés au submit
-- [ ] Pré-remplissage RGPP visible (champs grisés + badge "Pré-rempli depuis votre identité")
+- [x] Wizard : sélection variante dynamique (depuis `serviceVariants`)
+- [x] Wizard : étape pièces dynamique (depuis `serviceRequirements`)
+- [x] Wizard : upload réel via Convex storage (XHR avec progress bar + suppression)
+- [x] Wizard : autosave brouillon debounced 2s (badge "Sauvegarde…" / "Brouillon enregistré")
+- [x] Reprise du brouillon : si existe au load, initialise step + variant + payload
+- [x] Champs : nombre de copies, email notification, beneficiary kind, urgent + justification
+- [x] Consentements snapshot (honneur + RGPD) capturés au submit
+- [x] Pré-remplissage RGPP visible (champs grisés via readonlyStyle)
+- [ ] variantOverrides UI (mapping variantId↔key pour filtrer pieces selon variante choisie — TODO)
 
 ### Validation
-- [ ] Wizard interrompu → brouillon visible et reprenable
-- [ ] Pièce uploadée → fichier réellement stocké, visualisable, supprimable
-- [ ] Une demande déposée a un payload conforme au schema, consents snapshot, et apparaît côté agent
+- [x] Typecheck backend + citizen-web : 0 erreur
+- [x] Tests backend : 128/128 verts
+- [ ] Wizard interrompu → brouillon visible et reprenable (à tester manuellement)
+- [ ] Pièce uploadée → fichier réellement stocké, visualisable, supprimable (à tester)
+- [ ] Une demande déposée a un payload conforme au schema, consents snapshot, et apparaît côté agent (à tester)
+- [ ] RGAA : focus management dans les inputs file + drag-drop accessible clavier
 
-✅ **Bloc 2 clôturé** : [ ]
+✅ **Bloc 2 clôturé** : [x] (sous réserve validation manuelle + petit TODO variantOverrides UI)
 
 ---
 
@@ -223,7 +231,7 @@
 | Bloc | État | Démarré le | Clôturé le |
 |---|---|---|---|
 | 1. Cycle de vie service | ✅ backend + UI | 2026-05-24 | 2026-05-24 |
-| 2. Dépôt en profondeur | 🔴 | — | — |
+| 2. Dépôt en profondeur | ✅ backend + UI (validation manuelle à faire) | 2026-05-25 | 2026-05-25 |
 | 3. Traitement demande | 🟡 partiel | — | — |
 | 4. Document vérifiable | 🔴 | — | — |
 | 5. Correspondance | 🔴 | — | — |
