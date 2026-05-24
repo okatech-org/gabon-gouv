@@ -385,8 +385,12 @@ export const reset = mutation({
     // ════════════════════════════════════════════════════════
     // 4. Citoyens
     // ════════════════════════════════════════════════════════
+    // idnSub fictifs pour le seed — à remplacer par les vrais sub IDN issus
+    // de citoyen.ga sandbox lors de la 1ère connexion réelle. Voir le
+    // README pour la procédure de liaison.
     const marie = await ctx.db.insert("citizens", {
       nip: "184127600504",
+      idnSub: "idn-sandbox-marie-obame",
       name: "Marie Estelle OBAME",
       email: "marie.obame@id.gouv.ga",
       phone: "+241 06 24 18 33",
@@ -408,6 +412,7 @@ export const reset = mutation({
 
     const jpMoung = await ctx.db.insert("citizens", {
       nip: "178050099218",
+      idnSub: "idn-sandbox-jp-mounguengui",
       name: "Jean-Pierre MOUNGUENGUI",
       email: "jp.mounguenguie@id.gouv.ga",
       phone: "+241 06 78 22 14",
@@ -424,6 +429,7 @@ export const reset = mutation({
 
     const aicha = await ctx.db.insert("citizens", {
       nip: "191041100712",
+      idnSub: "idn-sandbox-aicha-bongo",
       name: "Aïcha BONGO",
       email: "a.bongo@id.gouv.ga",
       birthDate: "11 avril 1991",
@@ -436,6 +442,7 @@ export const reset = mutation({
 
     const paulOndo = await ctx.db.insert("citizens", {
       nip: "188090677341",
+      idnSub: "idn-sandbox-paul-ondo",
       name: "Paul ONDO",
       email: "p.ondo@id.gouv.ga",
       birthDate: "6 septembre 1988",
@@ -448,6 +455,7 @@ export const reset = mutation({
 
     const nzoghe = await ctx.db.insert("citizens", {
       nip: "174030042519",
+      idnSub: "idn-sandbox-famille-nzoghe",
       name: "Famille NZOGHE",
       birthDate: "3 mars 1974",
       birthPlace: "Lambaréné",

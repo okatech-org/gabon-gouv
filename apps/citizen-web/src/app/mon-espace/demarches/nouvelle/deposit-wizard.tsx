@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useTransition } from "react"
 import {
   Alert,
   Badge,
@@ -10,22 +10,86 @@ import {
   Checkbox,
   Field,
   Icon,
-  Progress,
   Radio,
   SectionHeading,
   Stepper,
   TextInput,
 } from "@workspace/ui"
-import type { CitizenProfile } from "@workspace/mocks/types"
+import { submitDepositAction } from "./actions"
 
-interface DepositWizardProps {
-  initialStep?: number
-  citizen: CitizenProfile
+interface ServiceProp {
+  slug: string
+  title: string
+  category: string
+  org: string
+  variants: Array<{
+    key: string
+    title: string
+    description: string
+    who: string
+    isDefault: boolean
+  }>
+  pieces: Array<{
+    title: string
+    description: string
+    required: boolean
+    auto: boolean
+  }>
 }
 
-export function DepositWizard({ initialStep = 0, citizen }: DepositWizardProps) {
-  const [step, setStep] = useState(initialStep)
+interface CitizenProp {
+  name: string
+  email: string
+  nip: string
+  phone: string
+  address: string
+  birthDate: string
+}
+
+interface DepositWizardProps {
+  service: ServiceProp
+  citizen: CitizenProp
+}
+
+export function DepositWizard({ service, citizen }: DepositWizardProps) {
+  const [step, setStep] = useState(0)
   const steps = ["Service", "Informations", "Pièces justificatives", "Vérification"]
+
+  // État du formulaire — minimal pour la 1ère itération (les uploads de
+  // pièces sont cosmétiques tant que le storage n'est pas branché).
+  const defaultVariant =
+    service.variants.find((v) => v.isDefault)?.key ?? service.variants[0]?.key
+  const [variantKey, setVariantKey] = useState<string | undefined>(defaultVariant)
+  const [copies, setCopies] = useState(1)
+  const [email, setEmail] = useState(citizen.email)
+  const [beneficiary, setBeneficiary] = useState<"self" | "third_party">("self")
+  const [honor, setHonor] = useState(false)
+  const [rgpd, setRgpd] = useState(false)
+
+  const [pending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+
+  const handleSubmit = () => {
+    setError(null)
+    startTransition(async () => {
+      const result = await submitDepositAction({
+        serviceSlug: service.slug,
+        variantKey,
+        numberOfCopies: copies,
+        recipientEmail: email,
+        beneficiaryKind: beneficiary,
+        honor,
+        rgpd,
+      })
+      if (!result.ok) {
+        setError(result.message ?? "Impossible de déposer la demande.")
+      }
+      // En cas de succès, le server action redirige — pas besoin de gérer ici.
+    })
+  }
+
+  const selectedVariantTitle =
+    service.variants.find((v) => v.key === variantKey)?.title ?? "—"
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
@@ -50,9 +114,7 @@ export function DepositWizard({ initialStep = 0, citizen }: DepositWizardProps) 
           <Icon name="chevronRight" size={12} />
           <span>Nouveau dépôt</span>
           <Icon name="chevronRight" size={12} />
-          <span style={{ color: "var(--ink-900)", fontWeight: 600 }}>
-            Acte de naissance
-          </span>
+          <span style={{ color: "var(--ink-900)", fontWeight: 600 }}>{service.title}</span>
         </nav>
         <div
           style={{
@@ -62,10 +124,11 @@ export function DepositWizard({ initialStep = 0, citizen }: DepositWizardProps) 
           }}
         >
           <h1 style={{ fontSize: 22 }}>
-            Demande d&apos;acte de naissance · copie intégrale
+            {service.title}
+            {variantKey ? ` · ${selectedVariantTitle.toLowerCase()}` : ""}
           </h1>
           <Badge tone="primary" size="sm">
-            Brouillon · sauvegardé automatiquement
+            Brouillon
           </Badge>
         </div>
       </div>
@@ -88,10 +151,40 @@ export function DepositWizard({ initialStep = 0, citizen }: DepositWizardProps) 
         }}
       >
         <div style={{ maxWidth: 920, margin: "0 auto" }}>
-          {step === 0 && <DepositStep1 />}
-          {step === 1 && <DepositStep2 citizen={citizen} />}
-          {step === 2 && <DepositStep3 />}
-          {step === 3 && <DepositStep4 citizen={citizen} />}
+          {step === 0 && (
+            <Step1
+              variants={service.variants}
+              variantKey={variantKey}
+              setVariantKey={setVariantKey}
+              copies={copies}
+              setCopies={setCopies}
+            />
+          )}
+          {step === 1 && (
+            <Step2
+              citizen={citizen}
+              email={email}
+              setEmail={setEmail}
+              beneficiary={beneficiary}
+              setBeneficiary={setBeneficiary}
+            />
+          )}
+          {step === 2 && <Step3 pieces={service.pieces} />}
+          {step === 3 && (
+            <Step4
+              service={service}
+              citizen={citizen}
+              variantTitle={selectedVariantTitle}
+              copies={copies}
+              email={email}
+              beneficiary={beneficiary}
+              honor={honor}
+              setHonor={setHonor}
+              rgpd={rgpd}
+              setRgpd={setRgpd}
+              error={error}
+            />
+          )}
         </div>
       </main>
 
@@ -109,7 +202,7 @@ export function DepositWizard({ initialStep = 0, citizen }: DepositWizardProps) 
           variant="ghost"
           icon="arrowLeft"
           onClick={() => setStep(Math.max(0, step - 1))}
-          disabled={step === 0}
+          disabled={step === 0 || pending}
         >
           Précédent
         </Button>
@@ -122,8 +215,13 @@ export function DepositWizard({ initialStep = 0, citizen }: DepositWizardProps) 
             Suivant
           </Button>
         ) : (
-          <Button icon="shieldCheck" variant="success">
-            Déposer ma demande
+          <Button
+            icon="shieldCheck"
+            variant="success"
+            onClick={handleSubmit}
+            disabled={pending || !honor || !rgpd}
+          >
+            {pending ? "Dépôt en cours…" : "Déposer ma demande"}
           </Button>
         )}
       </footer>
@@ -131,7 +229,19 @@ export function DepositWizard({ initialStep = 0, citizen }: DepositWizardProps) 
   )
 }
 
-function DepositStep1() {
+function Step1({
+  variants,
+  variantKey,
+  setVariantKey,
+  copies,
+  setCopies,
+}: {
+  variants: ServiceProp["variants"]
+  variantKey: string | undefined
+  setVariantKey: (k: string) => void
+  copies: number
+  setCopies: (n: number) => void
+}) {
   return (
     <Card>
       <SectionHeading
@@ -140,34 +250,23 @@ function DepositStep1() {
         level={3}
       />
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <Radio
-          checked
-          label="Copie intégrale"
-          hint="Reproduit l'intégralité de l'acte avec toutes les mentions marginales. Recommandée pour les démarches officielles."
-          name="type"
-          id="t1"
-        />
-        <Radio
-          checked={false}
-          label="Extrait avec filiation"
-          hint="Mentionne les noms des parents. Suffisant pour la plupart des démarches (mariage, nationalité…)."
-          name="type"
-          id="t2"
-        />
-        <Radio
-          checked={false}
-          label="Extrait sans filiation"
-          hint="Sans mention des parents. Demande possible par toute personne."
-          name="type"
-          id="t3"
-        />
+        {variants.length === 0 && (
+          <Alert tone="info">Aucune variante définie pour ce service.</Alert>
+        )}
+        {variants.map((v) => (
+          <Radio
+            key={v.key}
+            checked={variantKey === v.key}
+            label={v.title}
+            hint={v.description}
+            name="variant"
+            id={`v-${v.key}`}
+            onChange={() => setVariantKey(v.key)}
+          />
+        ))}
       </div>
       <div style={{ marginTop: 24 }}>
-        <SectionHeading
-          title="Nombre de copies"
-          subtitle="Pour quel usage ?"
-          level={3}
-        />
+        <SectionHeading title="Nombre de copies" subtitle="Pour quel usage ?" level={3} />
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <div
             style={{
@@ -179,6 +278,8 @@ function DepositStep1() {
             }}
           >
             <button
+              type="button"
+              onClick={() => setCopies(Math.max(1, copies - 1))}
               style={{
                 width: 36,
                 height: 38,
@@ -189,8 +290,12 @@ function DepositStep1() {
             >
               −
             </button>
-            <span style={{ padding: "0 16px", fontWeight: 700, fontSize: 16 }}>2</span>
+            <span style={{ padding: "0 16px", fontWeight: 700, fontSize: 16 }}>
+              {copies}
+            </span>
             <button
+              type="button"
+              onClick={() => setCopies(Math.min(5, copies + 1))}
               style={{
                 width: 36,
                 height: 38,
@@ -204,7 +309,7 @@ function DepositStep1() {
             </button>
           </div>
           <span style={{ fontSize: 13, color: "var(--ink-600)" }}>
-            Max. 5 copies par demande · gratuit pour le citoyen
+            Max. 5 copies par demande
           </span>
         </div>
       </div>
@@ -212,10 +317,22 @@ function DepositStep1() {
   )
 }
 
-function DepositStep2({ citizen }: { citizen: CitizenProfile }) {
+function Step2({
+  citizen,
+  email,
+  setEmail,
+  beneficiary,
+  setBeneficiary,
+}: {
+  citizen: CitizenProp
+  email: string
+  setEmail: (s: string) => void
+  beneficiary: "self" | "third_party"
+  setBeneficiary: (b: "self" | "third_party") => void
+}) {
   const readOnlyStyle = { background: "var(--ink-50)", color: "var(--ink-600)" } as const
   const [lastName, ...rest] = citizen.name.split(" ")
-  const firstNames = rest.join(" ") || "Marie Estelle"
+  const firstNames = rest.join(" ") || ""
   return (
     <Card>
       <SectionHeading
@@ -224,35 +341,18 @@ function DepositStep2({ citizen }: { citizen: CitizenProfile }) {
         level={3}
       />
       <Alert tone="info" style={{ marginBottom: 20 }}>
-        <b>Pré-remplissage actif.</b> Les informations vérifiées par votre NIP sont
-        automatiquement renseignées et ne peuvent pas être modifiées ici.
+        <b>Pré-remplissage actif.</b> Les informations vérifiées par votre identité numérique
+        sont automatiquement renseignées.
       </Alert>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 16,
-        }}
-      >
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <Field label="Nom de famille" required>
           <TextInput defaultValue={lastName} style={readOnlyStyle} readOnly />
         </Field>
         <Field label="Prénoms" required>
           <TextInput defaultValue={firstNames} style={readOnlyStyle} readOnly />
         </Field>
-        <Field label="Date de naissance" required>
-          <TextInput
-            defaultValue={citizen.birthDate ?? ""}
-            style={readOnlyStyle}
-            readOnly
-          />
-        </Field>
-        <Field label="Lieu de naissance" required>
-          <TextInput
-            defaultValue="Libreville, Estuaire"
-            style={readOnlyStyle}
-            readOnly
-          />
+        <Field label="Date de naissance">
+          <TextInput defaultValue={citizen.birthDate} style={readOnlyStyle} readOnly />
         </Field>
         <Field label="NIP" required>
           <TextInput
@@ -267,7 +367,7 @@ function DepositStep2({ citizen }: { citizen: CitizenProfile }) {
           required
           hint="Vous y recevrez le récépissé et l'acte signé."
         >
-          <TextInput defaultValue={citizen.email} />
+          <TextInput value={email} onChange={(e) => setEmail(e.target.value)} />
         </Field>
       </div>
       <div
@@ -278,55 +378,32 @@ function DepositStep2({ citizen }: { citizen: CitizenProfile }) {
           borderRadius: 8,
         }}
       >
-        <Checkbox checked label="Je demande l'acte pour moi-même." id="self" />
+        <Radio
+          checked={beneficiary === "self"}
+          label="Je demande l'acte pour moi-même."
+          name="beneficiary"
+          id="b-self"
+          onChange={() => setBeneficiary("self")}
+        />
         <div style={{ height: 8 }} />
-        <Checkbox
-          checked={false}
+        <Radio
+          checked={beneficiary === "third_party"}
           label="Je demande l'acte pour un tiers (joindre mandat à l'étape suivante)."
-          id="proxy"
+          name="beneficiary"
+          id="b-third"
+          onChange={() => setBeneficiary("third_party")}
         />
       </div>
     </Card>
   )
 }
 
-interface PieceMock {
-  title: string
-  description: string
-  required: boolean
-  status: "uploaded" | "uploading" | "idle"
-  file?: string
-  size?: string
-}
-
-function DepositStep3() {
-  const pieces: PieceMock[] = [
-    {
-      title: "Pièce d'identité du demandeur",
-      description: "CNI ou passeport en cours de validité.",
-      required: true,
-      status: "uploaded",
-      file: "CNI_obame.pdf",
-      size: "1,2 Mo",
-    },
-    {
-      title: "Justificatif de filiation",
-      description: "Livret de famille ou acte des parents.",
-      required: true,
-      status: "uploading",
-    },
-    {
-      title: "Mandat signé (si demande pour un tiers)",
-      description: "Modèle disponible en téléchargement.",
-      required: false,
-      status: "idle",
-    },
-  ]
+function Step3({ pieces }: { pieces: ServiceProp["pieces"] }) {
   return (
     <Card>
       <SectionHeading
         title="3. Pièces justificatives"
-        subtitle="2 pièces requises, 1 facultative. Glissez-déposez vos fichiers."
+        subtitle={`${pieces.filter((p) => p.required).length} requise${pieces.filter((p) => p.required).length > 1 ? "s" : ""}, ${pieces.filter((p) => !p.required).length} facultative${pieces.filter((p) => !p.required).length > 1 ? "s" : ""}. Téléversement à venir.`}
         level={3}
       />
       {pieces.map((p, i) => (
@@ -337,10 +414,8 @@ function DepositStep3() {
             border: "1px solid var(--ink-200)",
             borderRadius: 8,
             padding: 16,
-            background:
-              p.status === "uploaded" ? "var(--success-50)" : "white",
-            borderColor:
-              p.status === "uploaded" ? "#9bcfa6" : "var(--ink-200)",
+            background: p.auto ? "var(--success-50)" : "white",
+            borderColor: p.auto ? "#9bcfa6" : "var(--ink-200)",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -350,25 +425,15 @@ function DepositStep3() {
                 height: 36,
                 borderRadius: 6,
                 flexShrink: 0,
-                background:
-                  p.status === "uploaded"
-                    ? "var(--success-500)"
-                    : p.status === "uploading"
-                      ? "var(--primary-50)"
-                      : "var(--ink-100)",
-                color:
-                  p.status === "uploaded"
-                    ? "white"
-                    : p.status === "uploading"
-                      ? "var(--primary-500)"
-                      : "var(--ink-500)",
+                background: p.auto ? "var(--success-500)" : "var(--ink-100)",
+                color: p.auto ? "white" : "var(--ink-500)",
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
               <Icon
-                name={p.status === "uploaded" ? "check" : "paperclip"}
+                name={p.auto ? "check" : "paperclip"}
                 size={16}
                 stroke={2.25}
               />
@@ -380,46 +445,18 @@ function DepositStep3() {
                   <span style={{ color: "var(--danger-500)", marginLeft: 4 }}>*</span>
                 )}
               </div>
-              <div style={{ fontSize: 13, color: "var(--ink-600)" }}>
-                {p.description}
-              </div>
+              <div style={{ fontSize: 13, color: "var(--ink-600)" }}>{p.description}</div>
             </div>
-            {p.status === "uploaded" && (
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 12, color: "var(--ink-700)" }}>{p.file}</span>
-                <span style={{ fontSize: 11, color: "var(--ink-500)" }}>{p.size}</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  icon="trash"
-                  style={{ color: "var(--danger-500)" }}
-                >
-                  {""}
-                </Button>
-              </div>
-            )}
-            {p.status === "idle" && (
-              <Button variant="secondary" icon="upload" size="sm">
+            {p.auto ? (
+              <Badge tone="archived" size="sm" dot>
+                Pré-rempli
+              </Badge>
+            ) : (
+              <Button variant="secondary" icon="upload" size="sm" disabled>
                 Téléverser
               </Button>
             )}
-            {p.status === "uploading" && (
-              <span
-                style={{
-                  fontSize: 12,
-                  color: "var(--primary-600)",
-                  fontWeight: 600,
-                }}
-              >
-                Analyse en cours…
-              </span>
-            )}
           </div>
-          {p.status === "uploading" && (
-            <div style={{ marginTop: 10 }}>
-              <Progress value={62} label="62 %" />
-            </div>
-          )}
         </div>
       ))}
       <div
@@ -436,29 +473,50 @@ function DepositStep3() {
         <Icon
           name="cpu"
           size={14}
-          style={{
-            verticalAlign: "middle",
-            marginRight: 6,
-            color: "var(--primary-500)",
-          }}
+          style={{ verticalAlign: "middle", marginRight: 6, color: "var(--primary-500)" }}
         />
-        <b>Détection automatique.</b> L&apos;IA vérifie la lisibilité et le type de chaque
-        document. Aucune pièce n&apos;est transmise à un tiers.
+        <b>Téléversement à venir.</b> Le stockage Convex sera branché dans la prochaine
+        itération. Vous pouvez déposer sans pièces pour tester le flow.
       </div>
     </Card>
   )
 }
 
-function DepositStep4({ citizen }: { citizen: CitizenProfile }) {
-  const [lastName, ...rest] = citizen.name.split(" ")
-  const firstNames = rest.join(" ") || "Marie Estelle"
+function Step4({
+  service,
+  citizen,
+  variantTitle,
+  copies,
+  email,
+  beneficiary,
+  honor,
+  setHonor,
+  rgpd,
+  setRgpd,
+  error,
+}: {
+  service: ServiceProp
+  citizen: CitizenProp
+  variantTitle: string
+  copies: number
+  email: string
+  beneficiary: "self" | "third_party"
+  honor: boolean
+  setHonor: (b: boolean) => void
+  rgpd: boolean
+  setRgpd: (b: boolean) => void
+  error: string | null
+}) {
   const summary: [string, string][] = [
-    ["Type d'acte", "Copie intégrale"],
-    ["Nombre de copies", "2"],
-    ["Demandeur", `${firstNames} ${lastName}`],
+    ["Service", service.title],
+    ["Variante", variantTitle],
+    ["Nombre de copies", String(copies)],
+    ["Demandeur", citizen.name],
     ["NIP", citizen.nip],
-    ["Date de naissance", `${citizen.birthDate ?? ""} · Libreville`],
-    ["Adresse de notification", citizen.email],
+    ["Date de naissance", citizen.birthDate || "—"],
+    ["Pour", beneficiary === "self" ? "Moi-même" : "Un tiers"],
+    ["E-mail de notification", email],
+    ["Administration", service.org],
   ]
   return (
     <>
@@ -492,27 +550,6 @@ function DepositStep4({ citizen }: { citizen: CitizenProfile }) {
             </div>
           ))}
         </div>
-        <div style={{ marginTop: 18 }}>
-          <div
-            style={{
-              fontSize: 12,
-              fontWeight: 700,
-              color: "var(--ink-500)",
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-              marginBottom: 8,
-            }}
-          >
-            Pièces jointes (2)
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            {["CNI_obame.pdf · 1,2 Mo", "livret_famille.pdf · 2,8 Mo"].map((f) => (
-              <Badge key={f} tone="archived" dot icon="paperclip">
-                {f}
-              </Badge>
-            ))}
-          </div>
-        </div>
       </Card>
       <div
         style={{
@@ -524,7 +561,8 @@ function DepositStep4({ citizen }: { citizen: CitizenProfile }) {
         }}
       >
         <Checkbox
-          checked
+          checked={honor}
+          onChange={setHonor}
           label={
             <>
               <b>Je certifie sur l&apos;honneur</b> l&apos;exactitude des informations
@@ -536,7 +574,8 @@ function DepositStep4({ citizen }: { citizen: CitizenProfile }) {
         />
         <div style={{ height: 10 }} />
         <Checkbox
-          checked
+          checked={rgpd}
+          onChange={setRgpd}
           label={
             <>
               J&apos;accepte le <a href="#">traitement de mes données</a> conformément à la
@@ -546,6 +585,13 @@ function DepositStep4({ citizen }: { citizen: CitizenProfile }) {
           id="rgpd"
         />
       </div>
+      {error && (
+        <div style={{ marginTop: 14 }}>
+          <Alert tone="danger" title="Dépôt impossible">
+            {error}
+          </Alert>
+        </div>
+      )}
     </>
   )
 }

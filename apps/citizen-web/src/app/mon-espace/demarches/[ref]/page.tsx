@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { notFound } from "next/navigation"
 import {
   Avatar,
   Badge,
@@ -7,8 +8,13 @@ import {
   Icon,
   PageHeader,
   SectionHeading,
+  type Tone,
 } from "@workspace/ui"
-import { getTrackingDetail } from "@workspace/mocks/citizen"
+import { api } from "@workspace/backend/generated"
+import { convex } from "@/lib/convex"
+import { requireCurrentSession } from "@/lib/current-citizen"
+import { CancelRequestButton } from "./cancel-request-button"
+import { SendMessageBox } from "./send-message-box"
 
 export default async function CitizenTrackingPage({
   params,
@@ -16,7 +22,12 @@ export default async function CitizenTrackingPage({
   params: Promise<{ ref: string }>
 }) {
   const { ref } = await params
-  const tracking = await getTrackingDetail(ref)
+  const session = await requireCurrentSession()
+  const tracking = await convex.query(api.citizen.requests.getMyRequest, {
+    idnSub: session.idnSub,
+    ref,
+  })
+  if (!tracking) notFound()
 
   return (
     <>
@@ -31,9 +42,9 @@ export default async function CitizenTrackingPage({
         subtitle={tracking.subtitle}
         actions={
           <>
-            <Button variant="secondary" icon="messageSquare">
-              Écrire à l&apos;agent
-            </Button>
+            {tracking.canCancel && (
+              <CancelRequestButton requestRef={tracking.ref} />
+            )}
             <Button variant="outline" icon="download">
               Récépissé
             </Button>
@@ -63,7 +74,7 @@ export default async function CitizenTrackingPage({
               title="Suivi du traitement"
               level={3}
               action={
-                <Badge tone={tracking.statusTone} dot>
+                <Badge tone={tracking.statusTone as Tone} dot>
                   {tracking.status}
                 </Badge>
               }
@@ -179,11 +190,7 @@ export default async function CitizenTrackingPage({
             <SectionHeading
               title="Échanges avec l'administration"
               level={3}
-              action={
-                <Button variant="secondary" icon="messageSquare" size="sm">
-                  Nouveau message
-                </Button>
-              }
+              action={<SendMessageBox requestRef={tracking.ref} />}
             />
             {tracking.exchanges.map((m, i) => (
               <div
@@ -283,7 +290,7 @@ export default async function CitizenTrackingPage({
             >
               <div style={{ color: "var(--ink-500)" }}>Statut</div>
               <div>
-                <Badge tone={tracking.statusTone} dot>
+                <Badge tone={tracking.statusTone as Tone} dot>
                   {tracking.status}
                 </Badge>
               </div>

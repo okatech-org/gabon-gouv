@@ -13,33 +13,27 @@ import {
   Th,
   Tr,
   type IconName,
+  type Tone,
 } from "@workspace/ui"
-import {
-  getCitizenDashboardStats,
-  getCitizenMessages,
-  getCitizenRecommendations,
-  getCitizenRequests,
-  getCurrentCitizen,
-} from "@workspace/mocks/citizen"
+import { api } from "@workspace/backend/generated"
+import { convex } from "@/lib/convex"
+import { requireCurrentSession } from "@/lib/current-citizen"
 
 export default async function CitizenDashboardPage() {
-  const [citizen, stats, requests, recommendations, messages] = await Promise.all([
-    getCurrentCitizen(),
-    getCitizenDashboardStats(),
-    getCitizenRequests(),
-    getCitizenRecommendations(),
-    getCitizenMessages(),
-  ])
-
+  const session = await requireCurrentSession()
+  const data = await convex.query(api.citizen.dashboard.getDashboard, {
+    idnSub: session.idnSub,
+  })
+  const { profile, stats, requests, recommendations, messages } = data
   const unreadCount = messages.filter((m) => m.unread).length
-  const firstName = citizen.name.split(" ")[0]
+  const firstName = profile.name.split(" ")[0]
 
   return (
     <>
       <PageHeader
         breadcrumbs={["Mon espace"]}
         title={`Bonjour ${firstName}`}
-        subtitle={`${stats.inProgress} demandes en cours, 1 document à télécharger.`}
+        subtitle={`${stats.inProgress} demande${stats.inProgress > 1 ? "s" : ""} en cours, ${stats.documentsReceived} document${stats.documentsReceived > 1 ? "s" : ""} reçu${stats.documentsReceived > 1 ? "s" : ""}.`}
         actions={
           <>
             <Link
@@ -163,7 +157,7 @@ export default async function CitizenDashboardPage() {
                   </Td>
                   <Td>{r.depositedAt}</Td>
                   <Td>
-                    <Badge tone={r.tone} dot>
+                    <Badge tone={r.tone as Tone} dot>
                       {r.status}
                     </Badge>
                   </Td>

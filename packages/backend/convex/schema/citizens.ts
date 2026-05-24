@@ -15,6 +15,10 @@ import {
 export const citizensTables = {
   citizens: defineTable({
     nip: v.string(),
+    // Subject identifier de l'IDP Identité Numérique Gabonaise (citoyen.ga).
+    // Renseigné au premier login OIDC (provisioning manuel pour l'instant).
+    // Optionnel : un citoyen seedé sans idnSub ne peut pas se connecter.
+    idnSub: v.optional(v.string()),
     name: v.string(),
     email: v.optional(v.string()),
     phone: v.optional(v.string()),
@@ -34,7 +38,8 @@ export const citizensTables = {
     createdAt: v.number(),
   })
     .index("by_nip", ["nip"])
-    .index("by_email", ["email"]),
+    .index("by_email", ["email"])
+    .index("by_idn_sub", ["idnSub"]),
 
   // Filiation / relations déclarées (livret de famille, conjoint, enfants)
   citizenRelations: defineTable({

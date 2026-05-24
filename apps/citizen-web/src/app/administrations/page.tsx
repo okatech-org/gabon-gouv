@@ -8,22 +8,33 @@ import {
   TextInput,
   type IconName,
 } from "@workspace/ui"
-import {
-  DIRECTORY_FILTERS,
-  getCurrentCitizen,
-  getDirectoryOrgs,
-} from "@workspace/mocks/citizen"
+import { api } from "@workspace/backend/generated"
+import { convex } from "@/lib/convex"
+import { getCurrentSession } from "@/lib/current-citizen"
 
 export default async function CitizenDirectoryPage() {
-  const [citizen, orgs] = await Promise.all([
-    getCurrentCitizen(),
-    getDirectoryOrgs(),
+  const [session, orgs] = await Promise.all([
+    getCurrentSession(),
+    convex.query(api.citizen.directory.listOrganisms, {}),
   ])
+  const citizenName = session?.name ?? "Mon espace"
+  const total = orgs.length
+  const byCat = orgs.reduce<Record<string, number>>((acc, o) => {
+    acc[o.category] = (acc[o.category] ?? 0) + 1
+    return acc
+  }, {})
+  const DIRECTORY_FILTERS = [
+    `Tous (${total})`,
+    `Ministères (${byCat["Ministère"] ?? 0})`,
+    `Directions générales (${byCat["Direction générale"] ?? 0})`,
+    `Établissements publics (${byCat["Établissement public"] ?? 0})`,
+    `Collectivités (${byCat["Collectivité"] ?? 0})`,
+  ] as const
   const navLinks: { label: string; href: string }[] = [
     { label: "Démarches", href: "/" },
     { label: "Administrations", href: "/administrations" },
     { label: "Mon espace", href: "/mon-espace" },
-    { label: "Aide", href: "#" },
+    { label: "Aide", href: "/aide" },
   ]
 
   return (
@@ -60,16 +71,16 @@ export default async function CitizenDirectoryPage() {
           })}
         </nav>
         <div style={{ flex: 1 }} />
-        <Link href="/mon-espace" style={{ textDecoration: "none" }}>
+        <Link href={session ? "/mon-espace" : "/login"} style={{ textDecoration: "none" }}>
           <Button variant="secondary" icon="user">
-            {citizen.name}
+            {citizenName}
           </Button>
         </Link>
       </header>
 
       <PageHeader
         title="Annuaire des administrations"
-        subtitle="47 organismes publics enregistrés sur Gabon Connect."
+        subtitle={`${total} organismes publics enregistrés sur Gabon Connect.`}
         actions={
           <div style={{ display: "flex", gap: 8 }}>
             <TextInput

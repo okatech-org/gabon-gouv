@@ -8,7 +8,10 @@ import {
   ProbatoryBanner,
   type IconName,
 } from "@workspace/ui"
-import { getDocument } from "@workspace/mocks/citizen"
+import { notFound } from "next/navigation"
+import { api } from "@workspace/backend/generated"
+import { convex } from "@/lib/convex"
+import { requireCurrentSession } from "@/lib/current-citizen"
 
 export default async function CitizenDocumentPage({
   params,
@@ -16,19 +19,28 @@ export default async function CitizenDocumentPage({
   params: Promise<{ ref: string }>
 }) {
   const { ref } = await params
-  const doc = await getDocument(ref)
+  const session = await requireCurrentSession()
+  const doc = await convex.query(api.citizen.documents.getMyDocument, {
+    idnSub: session.idnSub,
+    actNumber: ref,
+  })
+  if (!doc) notFound()
 
   const linked: { icon: IconName; title: string; description: string; href: string }[] = [
+    ...(doc.requestRef
+      ? [
+          {
+            icon: "inbox" as IconName,
+            title: `Demande ${doc.requestRef}`,
+            description: `Délivrée le ${doc.deliveredAt}`,
+            href: `/mon-espace/demarches/${doc.requestRef}`,
+          },
+        ]
+      : []),
     {
-      icon: "inbox",
-      title: "Demande GC-2026-EC-002841",
-      description: "Déposée le 20 mai · délai 8 j",
-      href: "/mon-espace/demarches/GC-2026-EC-002841",
-    },
-    {
-      icon: "folder",
-      title: "Mon dossier · État civil",
-      description: "6 documents",
+      icon: "folder" as IconName,
+      title: `Mon dossier · ${doc.org}`,
+      description: "Voir l'historique",
       href: "#",
     },
   ]

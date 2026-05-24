@@ -7,7 +7,10 @@ import {
   RepublicBar,
   SectionHeading,
 } from "@workspace/ui"
-import { getCurrentCitizen, getServiceDetail } from "@workspace/mocks/citizen"
+import { notFound } from "next/navigation"
+import { api } from "@workspace/backend/generated"
+import { convex } from "@/lib/convex"
+import { getCurrentSession } from "@/lib/current-citizen"
 
 export default async function CitizenServiceDetailPage({
   params,
@@ -15,16 +18,18 @@ export default async function CitizenServiceDetailPage({
   params: Promise<{ slug: string }>
 }) {
   const { slug } = await params
-  const [citizen, service] = await Promise.all([
-    getCurrentCitizen(),
-    getServiceDetail(slug),
+  const [session, service] = await Promise.all([
+    getCurrentSession(),
+    convex.query(api.citizen.catalog.getServiceDetail, { slug }),
   ])
+  if (!service) notFound()
+  const citizenName = session?.name ?? "Mon espace"
 
   const navLinks: { label: string; href: string }[] = [
     { label: "Démarches", href: "/" },
     { label: "Administrations", href: "/administrations" },
     { label: "Mon espace", href: "/mon-espace" },
-    { label: "Aide", href: "#" },
+    { label: "Aide", href: "/aide" },
   ]
 
   return (
@@ -61,9 +66,9 @@ export default async function CitizenServiceDetailPage({
           })}
         </nav>
         <div style={{ flex: 1 }} />
-        <Link href="/mon-espace" style={{ textDecoration: "none" }}>
+        <Link href={session ? "/mon-espace" : "/login"} style={{ textDecoration: "none" }}>
           <Button variant="secondary" icon="user">
-            {citizen.name}
+            {citizenName}
           </Button>
         </Link>
       </header>
@@ -99,7 +104,7 @@ export default async function CitizenServiceDetailPage({
           </span>
           <Icon name="chevronRight" size={12} />
           <span style={{ color: "var(--ink-900)", fontWeight: 600 }}>
-            Acte de naissance
+            {service.title}
           </span>
         </div>
       </div>

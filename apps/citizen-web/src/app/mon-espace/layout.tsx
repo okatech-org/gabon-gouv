@@ -1,6 +1,9 @@
 import type { ReactNode } from "react"
+import { redirect } from "next/navigation"
 import { AppHeader, Sidebar } from "@workspace/ui"
-import { getCurrentCitizen } from "@workspace/mocks/citizen"
+import { api } from "@workspace/backend/generated"
+import { convex } from "@/lib/convex"
+import { requireCurrentSession } from "@/lib/current-citizen"
 import { buildCitizenNav } from "@/lib/citizen-nav"
 
 /**
@@ -18,7 +21,23 @@ export default async function CitizenSpaceLayout({
 }: {
   children: ReactNode
 }) {
-  const citizen = await getCurrentCitizen()
+  const session = await requireCurrentSession()
+  // Récupère le profil citoyen Convex pour avoir le nom officiel (état civil).
+  // Si le sub IDN n'est lié à aucun compte, on renvoie sur /login avec un
+  // bandeau "compte non provisionné".
+  let displayName: string
+  try {
+    const dashboard = await convex.query(api.citizen.dashboard.getDashboard, {
+      idnSub: session.idnSub,
+    })
+    displayName = dashboard.profile.name
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : ""
+    if (msg.includes("provisionn")) {
+      redirect("/login?reason=not-provisioned")
+    }
+    throw error
+  }
   const navItems = buildCitizenNav()
 
   return (
@@ -36,7 +55,7 @@ export default async function CitizenSpaceLayout({
         overflow: "hidden",
       }}
     >
-      <AppHeader user={citizen.name} role="Citoyenne" />
+      <AppHeader user={displayName} role="Citoyenne" />
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
         <Sidebar items={navItems} />
         <main

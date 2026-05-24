@@ -8,17 +8,14 @@ import {
   SectionHeading,
   type IconName,
 } from "@workspace/ui"
-import {
-  getHomeStats,
-  getServiceCategories,
-  getTopServices,
-} from "@workspace/mocks/citizen"
+import { api } from "@workspace/backend/generated"
+import { convex } from "@/lib/convex"
 
 export default async function CitizenHomePage() {
   const [categories, topServices, homeStats] = await Promise.all([
-    getServiceCategories(),
-    getTopServices(),
-    getHomeStats(),
+    convex.query(api.citizen.catalog.getCategories, {}),
+    convex.query(api.citizen.catalog.getTopServices, { limit: 6 }),
+    convex.query(api.citizen.home.getHomeStats, {}),
   ])
 
   const navLinks: { label: string; href: string }[] = [
@@ -568,11 +565,11 @@ export default async function CitizenHomePage() {
           }}
         >
           <div style={{ display: "flex", gap: 24 }}>
-            <a href="#legal">Mentions légales</a>
-            <a href="#a11y">Accessibilité</a>
-            <a href="#contact">Contact</a>
-            <a href="#status">État du service</a>
-            <a href="#cgu">CGU</a>
+            <Link href="/mentions-legales">Mentions légales</Link>
+            <Link href="/accessibilite">Accessibilité</Link>
+            <Link href="/contact">Contact</Link>
+            <Link href="/etat-du-service">État du service</Link>
+            <Link href="/cgu">CGU</Link>
           </div>
           <div>© 2026 République Gabonaise · Gabon Connect</div>
         </div>
