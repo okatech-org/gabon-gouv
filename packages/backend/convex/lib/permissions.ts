@@ -74,10 +74,22 @@ export type Action =
   | "archive.read"
   | "archive.eliminate_request"
   | "archive.eliminate_visa" // DGAN uniquement
-  // Catalogue de services
+  // Catalogue de services (Bloc 1)
+  | "service.read"
+  | "service.read_stats"
+  | "service.create"
+  | "service.update"
   | "service.publish"
-  | "service.draft"
+  | "service.unpublish"
   | "service.archive"
+  | "service.duplicate"
+  | "service.variant.crud"
+  | "service.requirement.crud"
+  | "service.template.update"
+  | "service.template.validate"
+  | "service.template.activate"
+  // Legacy (conservés pour compat avec tests existants — à supprimer)
+  | "service.draft"
   | "service.edit"
   // Organismes (plateforme)
   | "organism.register"
@@ -169,6 +181,8 @@ const AGENT_ANY_ROLE = new Set<Action>([
   "request.read.organism",
   "correspondence.read",
   "archive.read",
+  "service.read",
+  "service.read_stats",
 ])
 
 const AGENT_INSTRUCTEUR_ALLOWED = new Set<Action>([
@@ -190,6 +204,13 @@ const AGENT_SUPERVISEUR_ALLOWED = new Set<Action>([
 const CHEF_SERVICE_ALLOWED = new Set<Action>([
   ...AGENT_SUPERVISEUR_ALLOWED,
   "request.reject",
+  // Gestion catalogue services : config métier sans publication
+  "service.create",
+  "service.update",
+  "service.duplicate",
+  "service.variant.crud",
+  "service.requirement.crud",
+  "service.template.update",
 ])
 
 const OFFICIER_ALLOWED = new Set<Action>([
@@ -203,13 +224,26 @@ const OFFICIER_ALLOWED = new Set<Action>([
 
 const ADMIN_ORGANISME_ALLOWED = new Set<Action>([
   ...OFFICIER_ALLOWED,
+  // Hérité de chef_service (sinon admin_organisme ne pourrait pas créer un service)
+  "service.create",
+  "service.update",
+  "service.duplicate",
+  "service.variant.crud",
+  "service.requirement.crud",
+  "service.template.update",
+  // Spécifique admin_organisme : cycle de publication + validation comité
   "service.publish",
-  "service.draft",
+  "service.unpublish",
   "service.archive",
-  "service.edit",
+  "service.template.validate",
+  "service.template.activate",
+  // Dossiers et conventions
   "dossier.grant_access",
   "dossier.revoke_access",
   "convention.sign.organism",
+  // Legacy
+  "service.draft",
+  "service.edit",
 ])
 
 const ADMIN_TECHNIQUE_ALLOWED = new Set<Action>([

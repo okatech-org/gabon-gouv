@@ -143,6 +143,17 @@ export const REQUIREMENT_AUTOFILL_SOURCES = [
 export type RequirementAutofillSource = (typeof REQUIREMENT_AUTOFILL_SOURCES)[number]
 export const requirementAutofillSourceValidator = literals(...REQUIREMENT_AUTOFILL_SOURCES)
 
+export const SERVICE_ARCHIVED_REASON_KINDS = [
+  "replaced_by_other",
+  "policy_change",
+  "legal_obsolete",
+  "other",
+] as const
+export type ServiceArchivedReasonKind = (typeof SERVICE_ARCHIVED_REASON_KINDS)[number]
+export const serviceArchivedReasonKindValidator = literals(
+  ...SERVICE_ARCHIVED_REASON_KINDS,
+)
+
 /* ============================================================
    Document templates et variables
    ============================================================ */
@@ -564,6 +575,28 @@ export const AUDIT_VERBS = [
   "organism.register",
   "organism.activate",
   "organism.suspend",
+  "service.created",
+  "service.updated",
+  "service.published",
+  "service.unpublished",
+  "service.archived",
+  "service.duplicated",
+  "service.variant_added",
+  "service.variant_updated",
+  "service.variants_reordered",
+  "service.default_variant_set",
+  "service.variant_deleted",
+  "service.requirement_added",
+  "service.requirement_updated",
+  "service.requirements_reordered",
+  "service.requirement_deleted",
+  "service.template_drafted",
+  "service.template_validated",
+  "service.template_activated",
+  "service.template_var_added",
+  "service.template_var_updated",
+  "service.template_var_deleted",
+  // Legacy (conservés pour compat — à supprimer plus tard)
   "service.publish",
   "service.archive",
   "convention.sign",

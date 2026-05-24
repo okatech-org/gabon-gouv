@@ -1,8 +1,10 @@
 import { defineTable } from "convex/server"
 import { v } from "convex/values"
 import {
+  agentRoleValidator,
   pieceDocTypeValidator,
   requirementAutofillSourceValidator,
+  serviceArchivedReasonKindValidator,
   serviceDeliveryModeValidator,
   serviceStatusValidator,
   templateStatusValidator,
@@ -35,6 +37,7 @@ export const servicesTables = {
     variant: v.optional(v.string()),
     category: v.string(),
     description: v.optional(v.string()),
+    longDescription: v.optional(v.string()), // markdown pour fiche publique
     legalReferences: v.optional(v.array(v.string())), // « art. 71 Code civil »…
     whoCanApply: v.optional(v.string()),
     deliveryMode: v.optional(serviceDeliveryModeValidator),
@@ -44,13 +47,36 @@ export const servicesTables = {
     delayHours: v.number(),
     status: serviceStatusValidator,
     satisfaction: v.optional(v.number()),
+    // Médias / contenus enrichis
+    imageStorageKey: v.optional(v.string()),
+    faqStorageKey: v.optional(v.string()), // JSON: [{q, a}]
+    // Cycle de vie — audit dénormalisé pour affichage rapide
+    publishedAt: v.optional(v.number()),
+    publishedByAgentId: v.optional(v.id("agents")),
+    archivedAt: v.optional(v.number()),
+    archivedByAgentId: v.optional(v.id("agents")),
+    archivedReason: v.optional(v.string()),
+    archivedReasonKind: v.optional(serviceArchivedReasonKindValidator),
+    // Circuit de signature par défaut pour les documents générés par ce service
+    defaultSignatureCircuitTemplate: v.optional(
+      v.object({
+        steps: v.array(
+          v.object({
+            roleRequired: agentRoleValidator,
+            order: v.number(),
+          }),
+        ),
+      }),
+    ),
     // Caches stats
     requestsLast30d: v.optional(v.number()),
     avgDelayHours: v.optional(v.number()),
   })
     .index("by_slug", ["slug"])
     .index("by_organism_status", ["organismId", "status"])
-    .index("by_category", ["categorySlug"]),
+    .index("by_category", ["categorySlug"])
+    .index("by_organism_updatedAt", ["organismId"]) // tri par _creationTime descendant
+    .index("by_category_status", ["categorySlug", "status"]),
 
   // Variantes d'un service (ADR-0005)
   serviceVariants: defineTable({
@@ -70,7 +96,10 @@ export const servicesTables = {
     .index("by_service", ["serviceId"])
     .index("by_service_key", ["serviceId", "key"]),
 
-  // Pièces requises par service (template)
+  // Pièces requises par service (template).
+  // `variantOverrides` permet de surcharger `required` / `acceptedDocTypes`
+  // pour une variante donnée — ex. « Extrait sans filiation » qui ne demande
+  // pas de justificatif de filiation.
   serviceRequirements: defineTable({
     serviceId: v.id("services"),
     label: v.string(),
@@ -79,6 +108,15 @@ export const servicesTables = {
     acceptedDocTypes: v.array(pieceDocTypeValidator),
     autofillSource: v.optional(requirementAutofillSourceValidator),
     order: v.number(),
+    variantOverrides: v.optional(
+      v.array(
+        v.object({
+          variantId: v.id("serviceVariants"),
+          required: v.boolean(),
+          acceptedDocTypes: v.optional(v.array(pieceDocTypeValidator)),
+        }),
+      ),
+    ),
   }).index("by_service", ["serviceId"]),
 
   // Templates de documents générés (A5)
