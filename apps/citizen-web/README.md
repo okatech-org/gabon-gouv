@@ -30,9 +30,16 @@ env vars si on cible un déploiement IDN différent.
 
 ### Callback URL à whitelister côté IDN
 
+L'app sert en **HTTPS local** (cf. script `dev` : `next dev --experimental-https`)
+pour que le `redirect_uri` matche l'enregistrement IDN sandbox. Next.js génère
+un certificat self-signed à la 1ère exécution (cache dans `.next/`).
+
 better-auth pose le callback sous `/api/auth/oauth2/callback/{providerId}` :
-- Dev : `http://localhost:4000/api/auth/oauth2/callback/idn`
+- Dev : `https://localhost:4000/api/auth/oauth2/callback/idn`
 - Prod (futur) : `https://gabon.connect/api/auth/oauth2/callback/idn`
+
+À la 1ère ouverture de `https://localhost:4000`, accepter le certificat
+self-signed dans le navigateur (avertissement de sécurité standard).
 
 ### Provisioning des citoyens
 
