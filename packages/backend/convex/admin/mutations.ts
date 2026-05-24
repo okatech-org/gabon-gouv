@@ -249,7 +249,11 @@ export const validatePiece = mutation({
 
     const piece = await ctx.db.get(pieceId)
     if (!piece) throw new Error("Pièce introuvable.")
-    const request = await ctx.db.get(piece.requestId)
+    if (!piece.requestId) {
+      throw new Error("Pièce non rattachée à une demande.")
+    }
+    const requestId = piece.requestId
+    const request = await ctx.db.get(requestId)
     if (!request || request.organismId !== me.organismId) {
       throw new Error("Pièce hors de votre périmètre.")
     }
@@ -261,7 +265,7 @@ export const validatePiece = mutation({
       validatedByAgentId: me._id,
     })
     await ctx.db.insert("requestEvents", {
-      requestId: piece.requestId,
+      requestId,
       kind: "piece_received",
       title: "Pièce validée",
       description: `${piece.label} validée par l'agent.`,
@@ -275,7 +279,7 @@ export const validatePiece = mutation({
       const remaining = await ctx.db
         .query("pieces")
         .withIndex("by_request_status", (q) =>
-          q.eq("requestId", piece.requestId).eq("status", "missing"),
+          q.eq("requestId", requestId).eq("status", "missing"),
         )
         .first()
       if (!remaining) {
@@ -299,7 +303,11 @@ export const rejectPiece = mutation({
 
     const piece = await ctx.db.get(pieceId)
     if (!piece) throw new Error("Pièce introuvable.")
-    const request = await ctx.db.get(piece.requestId)
+    if (!piece.requestId) {
+      throw new Error("Pièce non rattachée à une demande.")
+    }
+    const requestId = piece.requestId
+    const request = await ctx.db.get(requestId)
     if (!request || request.organismId !== me.organismId) {
       throw new Error("Pièce hors de votre périmètre.")
     }
@@ -310,7 +318,7 @@ export const rejectPiece = mutation({
     })
     await ctx.db.patch(request._id, { status: "waiting_pieces" })
     await ctx.db.insert("requestEvents", {
-      requestId: piece.requestId,
+      requestId,
       kind: "piece_rejected",
       title: "Pièce rejetée",
       description: `${piece.label} : ${reason}`,

@@ -34,6 +34,7 @@ import type * as citizen_identity from "../citizen/identity.js";
 import type * as citizen_messages from "../citizen/messages.js";
 import type * as citizen_profile from "../citizen/profile.js";
 import type * as citizen_requests from "../citizen/requests.js";
+import type * as citizen_uploads from "../citizen/uploads.js";
 import type * as health from "../health.js";
 import type * as lib_audit from "../lib/audit.js";
 import type * as lib_enums from "../lib/enums.js";
@@ -95,6 +96,7 @@ declare const fullApi: ApiFromModules<{
   "citizen/messages": typeof citizen_messages;
   "citizen/profile": typeof citizen_profile;
   "citizen/requests": typeof citizen_requests;
+  "citizen/uploads": typeof citizen_uploads;
   health: typeof health;
   "lib/audit": typeof lib_audit;
   "lib/enums": typeof lib_enums;

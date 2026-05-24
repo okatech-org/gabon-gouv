@@ -65,9 +65,23 @@ export const requestsTables = {
     .index("by_assigned_agent", ["assignedAgentId"])
     .index("by_service_status", ["serviceId", "status"]),
 
-  // Pièces justificatives téléversées
+  // Pièces justificatives téléversées.
+  //
+  // Cycle de vie :
+  //   1. Citoyen uploade → ctx.storage.generateUploadUrl + attachPiece →
+  //      pièce créée avec citizenId (ownership pendant la période "orphan")
+  //      et requirementId (template de référence). requestId VIDE à ce stade.
+  //   2. Citoyen soumet la demande → submitRequest reassigne requestId sur
+  //      toutes les pièces uploadées, citizenId reste pour audit.
+  //   3. Agent traite/valide/rejette → reste rattaché à requestId.
   pieces: defineTable({
-    requestId: v.id("requests"),
+    // Optionnel pendant la période d'upload pré-submit. Requis dès qu'une
+    // demande existe (assuré par submitRequest qui patche systématiquement).
+    requestId: v.optional(v.id("requests")),
+    // Ownership pendant la période orphan + audit après rattachement
+    citizenId: v.optional(v.id("citizens")),
+    // Lien optionnel vers la requirement (template) qui a déclenché cette pièce
+    requirementId: v.optional(v.id("serviceRequirements")),
     label: v.string(),
     docType: v.optional(pieceDocTypeValidator),
     filename: v.optional(v.string()),
@@ -85,7 +99,8 @@ export const requestsTables = {
     rejectionReason: v.optional(v.string()),
   })
     .index("by_request", ["requestId"])
-    .index("by_request_status", ["requestId", "status"]),
+    .index("by_request_status", ["requestId", "status"])
+    .index("by_citizen_orphan", ["citizenId", "requestId"]),
 
   // Vérifications automatiques exécutées sur une demande (A3)
   verifications: defineTable({
