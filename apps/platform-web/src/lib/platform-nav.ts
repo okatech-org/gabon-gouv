@@ -26,12 +26,13 @@ export function buildPlatformNav(badges: SidebarBadges = {}): SidebarItem[] {
       label: "Catalogue services",
       icon: "layers",
       count: badges.services,
+      href: "/catalogue",
     },
-    { id: "cit", label: "Citoyens", icon: "users" },
+    { id: "cit", label: "Citoyens", icon: "users", href: "/citoyens" },
     { id: "stats", label: "Statistiques", icon: "barChart", href: "/statistiques" },
     { section: "Plateforme" },
-    { id: "infra", label: "Infrastructure", icon: "server" },
-    { id: "sec", label: "Sécurité & audit", icon: "shield" },
+    { id: "infra", label: "Infrastructure", icon: "server", href: "/infrastructure" },
+    { id: "sec", label: "Sécurité & audit", icon: "shield", href: "/securite" },
     {
       id: "onboard",
       label: "Onboarding",
@@ -39,7 +40,7 @@ export function buildPlatformNav(badges: SidebarBadges = {}): SidebarItem[] {
       href: "/onboarding",
       count: badges.onboarding,
     },
-    { id: "params", label: "Paramètres", icon: "settings" },
+    { id: "params", label: "Paramètres", icon: "settings", href: "/parametres" },
   ]
 }
 

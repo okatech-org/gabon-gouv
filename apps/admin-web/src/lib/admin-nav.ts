@@ -43,8 +43,8 @@ export function buildAdminNav(badges: SidebarBadges = {}): SidebarItem[] {
     { section: "Organisme" },
     { id: "services", label: "Mes services", icon: "layers", href: "/services" },
     { id: "annuaire", label: "Annuaire", icon: "building", href: "/annuaire" },
-    { id: "equipe", label: "Équipe", icon: "users" },
-    { id: "parametres", label: "Paramètres", icon: "settings" },
+    { id: "equipe", label: "Équipe", icon: "users", href: "/equipe" },
+    { id: "parametres", label: "Paramètres", icon: "settings", href: "/parametres" },
   ]
 }
 
