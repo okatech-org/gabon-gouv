@@ -519,41 +519,49 @@ veut du WYSIWYG → option C en remplacement.
 
 ---
 
-## 11. Décisions à trancher avec l'utilisateur
+## 11. Décisions verrouillées
 
-1. **Cycle canonique** : on garde `signAndIssue` ET `prepareDocument` +
-   circuit ? Ou un seul ? → **proposition** : on garde les deux avec
-   sémantique claire (cf. § 2.6).
+Validées avec l'utilisateur le 2026-05-26.
 
-2. **`signAndIssue` crée auto une archive** : on garde ce comportement
-   au Bloc 3 (squelette, complété en Bloc 6) ? → **proposition** : oui.
+1. ✅ **Cycle canonique** : on garde **les deux** chemins (`signAndIssue`
+   raccourci ET `prepareDocument` + circuit) avec sémantique claire :
+   - `signAndIssue` réservé aux services à signature simple
+     (`services.defaultSignatureCircuitTemplate` vide ou 1 étape).
+   - Services multi-étapes : passage obligé par `prepareDocument` +
+     `approveSignatureStep` jusqu'à la dernière qui déclenche
+     `finalizeIssuance`.
 
-3. **`refuseSignatureStep`** : quel effet sur la demande ? Retour à
-   `in_instruction` (= "à revoir") ou direct `rejected` ? → **proposition** :
-   retour à `in_instruction` + event explicite + notif au chef. C'est plus
-   souple (l'instructeur peut corriger et re-préparer).
+2. ✅ **`finalizeIssuance` crée une entrée `archives` squelette** :
+   `status=active`, sha256 calculé, complétion (DUA, sort final, bordereaux)
+   au Bloc 6.
 
-4. **Provider horodatage qualifié RFC 3161** : existe-t-il un TSA gabonais
-   agréé ? Sinon → stub documenté qui met juste `new Date().toISOString()`,
-   à brancher plus tard via une action Node.
+3. ✅ **`refuseSignatureStep`** : retour à `in_instruction` + insert
+   `requestEvents` + notification au chef. Pas direct à `rejected`
+   (laissé à l'instructeur via `rejectRequest`).
 
-5. **OCR** : on stub (champs jamais remplis, badges jamais affichés) pour
-   v1, ou on intègre un service réel (Google Vision, AWS Textract, Tesseract
-   local) ? → **proposition** : stub. Champs schema déjà là, on ajoute à
-   un Bloc futur.
+4. ✅ **Horodatage qualifié RFC 3161** : stub `new Date().toISOString()`
+   pour v1, helper `signQualifiedTimestamp(bytes)` extrait pour brancher
+   un TSA réel plus tard (Convex action Node).
 
-6. **Notifications réelles** : déclencher l'écriture dans `notifications`
-   à chaque transition au Bloc 3 (envoi réel = autre Bloc), ou tout
-   reporter ? → **proposition** : on écrit dès maintenant (gratuit), envoi
-   plus tard.
+5. ✅ **OCR / `detectedDocType`** : stub. Champs schema laissés vides,
+   badges UI conditionnés à `ocrConfidence != null` (jamais affichés v1).
 
-7. **Vérifications automatiques** : on génère un set stub à `submitRequest`
-   (identité OK, autres pending) ou on attend ? → **proposition** : stub
-   maintenant, ça donne du contenu réaliste à la page agent.
+6. ✅ **Notifications** : insertion en table `notifications` dès Bloc 3
+   pour chaque transition critique (submitted, waiting_pieces, to_sign,
+   issued, rejected). **Envoi réel** (email/SMS/push) = Bloc à part.
 
-8. **Page `/signatures`** : on la code dès Bloc 3 ou on attend ? →
-   **proposition** : dès Bloc 3, parce que sans elle l'officier signataire
-   n'a aucun écran d'entrée pour faire son travail.
+7. ✅ **Vérifications stub à `submitRequest`** : insertion automatique
+   d'un set fixe (identity = `ok` si IDN sub présent, data_consistency = `pending`,
+   duplicate_detection = `pending`). Permet à l'UI agent d'avoir du contenu.
+
+8. ✅ **Page `/signatures`** : codée dès Bloc 3. Sans elle, l'officier
+   signataire n'a pas d'écran d'entrée pour son travail.
+
+### Décisions techniques additionnelles
+
+9. ✅ **Renderer PDF** : `@react-pdf/renderer` dans une Convex action
+   Node (option B § 10). Composant générique « acte officiel » v1 pour
+   tous les services, granularité par service plus tard.
 
 ---
 

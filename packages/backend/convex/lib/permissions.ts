@@ -65,6 +65,13 @@ export type Action =
   | "document.issue"
   | "document.revoke"
   | "document.read"
+  // Vérifications automatiques (Bloc 3)
+  | "verification.update"
+  // Signatures circuits (Bloc 3) — vérification dynamique additionnelle :
+  // on contrôle aussi que l'agent appelant est bien l'`assigneeAgentId`
+  // du step `current` (cf. `lib/signatureCircuit.ts`).
+  | "signature.approve"
+  | "signature.refuse"
   // Correspondance inter-admin
   | "correspondence.send"
   | "correspondence.read"
@@ -191,6 +198,13 @@ const AGENT_INSTRUCTEUR_ALLOWED = new Set<Action>([
   "piece.reject",
   "piece.request_more",
   "document.prepare",
+  "verification.update",
+  // L'instructeur est l'assignee du step 0 dans le circuit standard
+  // (`buildDocumentCircuit`). Il doit pouvoir l'approuver. La vérification
+  // dynamique d'assignee dans `approveStep` empêche un instructeur
+  // d'approuver un step qui n'est pas le sien.
+  "signature.approve",
+  "signature.refuse",
   "correspondence.send",
   "correspondence.sign_smime",
 ])
@@ -204,6 +218,11 @@ const AGENT_SUPERVISEUR_ALLOWED = new Set<Action>([
 const CHEF_SERVICE_ALLOWED = new Set<Action>([
   ...AGENT_SUPERVISEUR_ALLOWED,
   "request.reject",
+  // Le chef de service est un signataire intermédiaire dans les circuits.
+  // Le rôle est nécessaire mais pas suffisant : la mutation vérifie en plus
+  // que l'agent est bien l'assignee du step current.
+  "signature.approve",
+  "signature.refuse",
   // Gestion catalogue services : config métier sans publication
   "service.create",
   "service.update",

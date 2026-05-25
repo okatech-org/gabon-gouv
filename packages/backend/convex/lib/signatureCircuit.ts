@@ -22,6 +22,7 @@ import type {
   SignatureStepStatus,
   SignatureSubjectKind,
 } from "./enums"
+import { finalizeIssuance } from "./issuance"
 
 // ============================================================
 // Création d'un circuit
@@ -150,7 +151,7 @@ export async function approveStep(
     status: "completed",
     completedAt: now,
   })
-  await onCircuitCompleted(ctx, circuit._id)
+  await onCircuitCompleted(ctx, circuit._id, args.agentId)
   return { circuitCompleted: true }
 }
 
@@ -227,18 +228,22 @@ export async function cancelCircuit(
 // ============================================================
 
 /**
- * Appelée par `approveStep` quand le dernier step est validé.
+ * Appelée par `approveStep` quand le dernier step est validé. Dispatch
+ * vers la finalisation métier propre à chaque sujet.
  *
- * NOTE : les actions métier (issuer un document, marquer une correspondance
- * envoyée, activer un organisme) sont volontairement *non* implémentées ici.
- * Elles vivent dans les mutations de domaine. Cette fonction se contente de
- * patcher l'état minimal sur le sujet et de logger un événement.
+ * - `document` → délégation à `finalizeIssuance` (lib/issuance.ts) qui
+ *   patche `documents.status=issued`, propage à la `requests`, insère
+ *   l'archive squelette et notifie le citoyen.
+ * - `correspondence` → patch `status=sent` (envoi réel à brancher au Bloc 5).
+ * - `convention` → patch `status=signed` + `fullySignedAt` (P3 onboarding).
  *
- * Les hooks complets seront branchés quand on écrira les mutations métier.
+ * `lastApproverAgentId` est l'agent qui a validé la dernière étape — on le
+ * propage à `finalizeIssuance` comme acteur du `requestEvents`.
  */
 async function onCircuitCompleted(
   ctx: MutationCtx,
   circuitId: Id<"signatureCircuits">,
+  lastApproverAgentId: Id<"agents">,
 ): Promise<void> {
   const circuit = await ctx.db.get(circuitId)
   if (!circuit) return
@@ -246,13 +251,10 @@ async function onCircuitCompleted(
   switch (circuit.subjectKind) {
     case "document": {
       const docId = circuit.subjectId as Id<"documents">
-      const doc = await ctx.db.get(docId)
-      if (doc) {
-        await ctx.db.patch(docId, {
-          status: "signed",
-          issuedAt: Date.now(),
-        })
-      }
+      await finalizeIssuance(ctx, {
+        documentId: docId,
+        actorAgentId: lastApproverAgentId,
+      })
       break
     }
     case "correspondence": {

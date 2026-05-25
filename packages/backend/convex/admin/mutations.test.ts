@@ -393,7 +393,7 @@ describe("prepareDocument + circuit", () => {
     expect(req?.status).toBe("to_sign")
   })
 
-  test("walk complet : 3 approvals → document signed", async () => {
+  test("walk complet : 3 approvals → document issued (finalizeIssuance)", async () => {
     const f = await buildFixture()
     const { circuitId, documentId } = await f.t.mutation(
       api.admin.mutations.prepareDocument,
@@ -420,8 +420,14 @@ describe("prepareDocument + circuit", () => {
     })
     expect(final.circuitCompleted).toBe(true)
 
+    // Le doc passe direct en `issued` via finalizeIssuance (Bloc 3 § 11)
     const doc = await f.t.run((ctx) => ctx.db.get(documentId))
-    expect(doc?.status).toBe("signed")
+    expect(doc?.status).toBe("issued")
+    expect(doc?.verificationCode).toMatch(/^GC-[A-Z]{2}-\d{4}$/)
+
+    const req = await f.t.run((ctx) => ctx.db.get(f.requestId))
+    expect(req?.status).toBe("issued")
+    expect(req?.progressPct).toBe(100)
   })
 })
 

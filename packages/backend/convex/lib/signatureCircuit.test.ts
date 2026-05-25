@@ -165,7 +165,7 @@ describe("approveStep", () => {
     expect(steps[2].status).toBe("pending")
   })
 
-  test("walk complet : 3 approvals → circuit completed + document signé", async () => {
+  test("walk complet : 3 approvals → circuit completed + document émis (finalizeIssuance)", async () => {
     const t = convexTest(schema, modules)
     const f = await setupCircuit(t)
 
@@ -184,10 +184,23 @@ describe("approveStep", () => {
     )
     expect(res.circuitCompleted).toBe(true)
 
-    // onCircuitCompleted doit avoir patché le document
+    // onCircuitCompleted délègue à finalizeIssuance qui patche directement
+    // en `issued` (et non plus `signed`) — cf. décision § 11 Bloc 3.
     const doc = await t.run((ctx) => ctx.db.get(f.documentId))
-    expect(doc?.status).toBe("signed")
+    expect(doc?.status).toBe("issued")
     expect(doc?.issuedAt).toBeGreaterThan(0)
+    expect(doc?.verificationCode).toMatch(/^GC-[A-Z]{2}-\d{4}$/)
+    expect(doc?.sha256).toHaveLength(64)
+
+    // La demande doit aussi avoir basculé en issued
+    const req = await t.run((ctx) =>
+      ctx.db
+        .query("requests")
+        .withIndex("by_ref", (q) => q.eq("ref", "GC-T-001"))
+        .unique(),
+    )
+    expect(req?.status).toBe("issued")
+    expect(req?.progressPct).toBe(100)
 
     const { circuit, steps } = await t.run((ctx) =>
       getCircuitWithSteps(ctx, f.circuitId),

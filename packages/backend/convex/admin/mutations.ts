@@ -2,7 +2,7 @@ import { v } from "convex/values"
 import type { MutationCtx } from "../_generated/server"
 import { mutation } from "../lib/triggers" // wrapper trigger-aware (ADR-0007)
 import { requireAgent } from "../auth"
-import type { Id } from "../_generated/dataModel"
+import type { Doc, Id } from "../_generated/dataModel"
 import {
   actorFromAgent,
   assertCan,
@@ -14,6 +14,7 @@ import {
   createCircuit,
   refuseStep,
 } from "../lib/signatureCircuit"
+import { finalizeIssuance } from "../lib/issuance"
 import { confidentialityLevelValidator } from "../lib/enums"
 
 /* ---------- Assigner une demande à un agent ---------- */
@@ -112,87 +113,215 @@ export const updateInternalNote = mutation({
   },
 })
 
-/* ---------- Signer et émettre un acte ---------- */
+/* ---------- Signer et émettre un acte (raccourci 1 étape) ----------
+ *
+ * Réservé aux services à signature simple : `service.defaultSignatureCircuitTemplate`
+ * absent OU contenant 0/1 étape. Pour les services multi-étapes, on impose
+ * le passage par `prepareDocument` → `approveSignatureStep` × N.
+ *
+ * Préconditions vérifiées :
+ *   1. Permission `document.issue` (officier_signataire ou admin_organisme).
+ *   2. Demande dans un statut traitable (pas déjà issued/rejected/cancelled).
+ *   3. Toutes les pièces `required` au statut `validated`.
+ *   4. Toutes les `verifications` au statut `ok` ou `not_applicable`.
+ *   5. Service compatible avec le raccourci (0/1 étape de circuit).
+ *
+ * L'émission finale (sha256, verificationCode, archive, notif citoyen) est
+ * déléguée à `finalizeIssuance` (lib/issuance.ts).
+ */
 export const signAndIssue = mutation({
   args: { token: v.string(), ref: v.string() },
   handler: async (ctx, { token, ref }) => {
     const me = await requireAgent(ctx, token)
-    if (me.role !== "officier_signataire" && me.role !== "admin_organisme") {
-      throw new Error(
-        "Seul un officier signataire ou un admin d'organisme peut émettre un acte.",
-      )
-    }
+    assertCan(actorFromAgent(me), "document.issue")
+
     const request = await getRequestByRef(ctx, ref)
     if (!request) throw new Error("Demande introuvable.")
-    if (request.status === "issued") {
-      throw new Error("Demande déjà émise.")
+    if (request.organismId !== me.organismId) {
+      throw new Error("Demande hors de votre organisme.")
+    }
+    if (
+      request.status === "issued" ||
+      request.status === "rejected" ||
+      request.status === "cancelled"
+    ) {
+      throw new Error(`Demande "${request.status}" — émission impossible.`)
     }
 
-    const citizen = await ctx.db.get(request.citizenId)
-    if (!citizen) throw new Error("Citoyen introuvable.")
     const service = await ctx.db.get(request.serviceId)
     if (!service) throw new Error("Service introuvable.")
 
-    const now = Date.now()
-    const year = new Date(now).getFullYear()
-    const seq = String(Math.floor(Math.random() * 100000)).padStart(5, "0")
-    const actNumber = `${prefix(service.category)}-LBV-${year}-${seq}`
-    const sha256 = `${randHex()}${randHex()}${randHex()}${randHex()}`
-    const qrCode = `GC-${prefix(service.category)}-${seq}`
+    // Précondition : ce service est compatible avec le raccourci
+    const stepsCount = service.defaultSignatureCircuitTemplate?.steps.length ?? 0
+    if (stepsCount > 1) {
+      throw new Error(
+        "Ce service a un circuit de signature multi-étapes — passez par prepareDocument.",
+      )
+    }
 
-    const documentId = await ctx.db.insert("documents", {
-      actNumber,
-      requestId: request._id,
-      citizenId: request.citizenId,
-      issuedByAgentId: me._id,
-      organismId: me.organismId,
-      title: service.variant ? `${service.title} · ${service.variant}` : service.title,
-      issuedAt: now,
-      sha256,
-      qualifiedTimestamp: new Date(now).toISOString(),
-      qrCode,
-      payload: {
-        name: citizen.name,
-        nip: citizen.nip,
-        birthDate: citizen.birthDate,
-        birthPlace: citizen.birthPlace,
-        fatherName: citizen.fatherName,
-        motherName: citizen.motherName,
-      },
+    await assertPiecesAndVerificationsReady(ctx, request._id)
+
+    // Création (ou réutilisation) du document `prepared` puis finalisation.
+    const documentId = await upsertPreparedDocument(ctx, {
+      request,
+      service,
+      preparerAgentId: me._id,
     })
 
-    await ctx.db.patch(request._id, {
-      status: "issued",
-      progressPct: 100,
-      issuedAt: now,
+    return finalizeIssuance(ctx, {
+      documentId,
+      actorAgentId: me._id,
     })
-
-    await ctx.db.insert("requestEvents", {
-      requestId: request._id,
-      kind: "signature",
-      title: "Acte signé et émis",
-      description: `${actNumber} — empreinte ${sha256.slice(0, 8)}…`,
-      actor: me.name,
-      occurredAt: now,
-    })
-
-    // Versement automatique au SAE
-    await ctx.db.insert("archives", {
-      cote: `GA/${prefix(service.category)}/${year}/${seq}`,
-      description: `${service.title}${service.variant ? ` · ${service.variant}` : ""} · ${citizen.name}`,
-      producerOrganismId: me.organismId,
-      versedAt: now,
-      dua: "Indéf.",
-      status: "active",
-      finalSort: "Conservation définitive",
-      sha256,
-      linkedDocumentId: documentId,
-      linkedRequestId: request._id,
-    })
-
-    return { actNumber, sha256, documentId }
   },
 })
+
+/**
+ * Crée un document `prepared` s'il n'en existe pas encore pour la demande,
+ * sinon réutilise l'existant. Retourne l'ID dans les deux cas.
+ *
+ * Utilisé par `signAndIssue` (raccourci) ET par `prepareDocument` quand on
+ * veut juste ré-ouvrir une émission après une refonte d'un acte rejeté.
+ */
+async function upsertPreparedDocument(
+  ctx: MutationCtx,
+  args: {
+    request: Doc<"requests">
+    service: Doc<"services">
+    preparerAgentId: Id<"agents">
+  },
+): Promise<Id<"documents">> {
+  const existing = await ctx.db
+    .query("documents")
+    .withIndex("by_request", (q) => q.eq("requestId", args.request._id))
+    .filter((q) => q.neq(q.field("status"), "revoked"))
+    .first()
+  if (existing) return existing._id
+
+  const citizen = await ctx.db.get(args.request.citizenId)
+  if (!citizen) throw new Error("Citoyen introuvable.")
+
+  // Snapshot du template actif pour la variante de la demande.
+  // Stratégie : variant de la demande → variant par défaut du service →
+  // n'importe quelle variant du service qui a un template actif → null.
+  const matchingTemplate = await resolveActiveTemplate(ctx, {
+    serviceId: args.service._id,
+    preferredVariantId: args.request.serviceVariantId,
+  })
+
+  const now = Date.now()
+  const year = new Date(now).getFullYear()
+  const seq = String(Math.floor(Math.random() * 100000)).padStart(5, "0")
+  const actNumber = `${prefix(args.service.category)}-LBV-${year}-${seq}`
+
+  const documentId = await ctx.db.insert("documents", {
+    actNumber,
+    requestId: args.request._id,
+    citizenId: args.request.citizenId,
+    issuedByAgentId: args.preparerAgentId,
+    issuedByAgentNameSnapshot: (await ctx.db.get(args.preparerAgentId))?.name,
+    organismId: args.service.organismId,
+    title: args.service.variant
+      ? `${args.service.title} · ${args.service.variant}`
+      : args.service.title,
+    templateId: matchingTemplate?._id,
+    templateVersion: matchingTemplate?.version,
+    status: "prepared",
+    // sha256/qualifiedTimestamp/verificationCode seront remplis (ou
+    // remplacés) par finalizeIssuance ; on pose des stubs pour respecter
+    // la non-optionalité du schema.
+    issuedAt: now,
+    sha256: "0".repeat(64),
+    qualifiedTimestamp: new Date(now).toISOString(),
+    qrCode: `GC-${prefix(args.service.category)}-${seq}`,
+    payload: {
+      name: citizen.name,
+      nip: citizen.nip,
+      birthDate: citizen.birthDate,
+      birthPlace: citizen.birthPlace,
+      fatherName: citizen.fatherName,
+      motherName: citizen.motherName,
+    },
+  })
+  return documentId
+}
+
+/**
+ * Cherche un template actif pour un service, en préférant la variante demandée.
+ * Renvoie null si aucun template actif n'existe (cas légitime : service en
+ * cours de config).
+ */
+async function resolveActiveTemplate(
+  ctx: MutationCtx,
+  args: {
+    serviceId: Id<"services">
+    preferredVariantId?: Id<"serviceVariants">
+  },
+): Promise<Doc<"documentTemplates"> | null> {
+  // 1. Variante explicite de la demande
+  if (args.preferredVariantId) {
+    const direct = await ctx.db
+      .query("documentTemplates")
+      .withIndex("by_variant_status", (q) =>
+        q.eq("serviceVariantId", args.preferredVariantId!).eq("status", "active"),
+      )
+      .first()
+    if (direct) return direct
+  }
+
+  // 2. Toutes les variantes du service → on prend l'active de la variante
+  //    par défaut, sinon de la première variante avec un template actif.
+  const variants = await ctx.db
+    .query("serviceVariants")
+    .withIndex("by_service", (q) => q.eq("serviceId", args.serviceId))
+    .collect()
+  variants.sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || a.order - b.order)
+  for (const variant of variants) {
+    const template = await ctx.db
+      .query("documentTemplates")
+      .withIndex("by_variant_status", (q) =>
+        q.eq("serviceVariantId", variant._id).eq("status", "active"),
+      )
+      .first()
+    if (template) return template
+  }
+  return null
+}
+
+/**
+ * Vérifie qu'une demande est prête à l'émission :
+ *   - toutes les pièces `required` sont `validated`
+ *   - toutes les `verifications` sont `ok` ou `not_applicable`
+ */
+async function assertPiecesAndVerificationsReady(
+  ctx: MutationCtx,
+  requestId: Id<"requests">,
+): Promise<void> {
+  const pieces = await ctx.db
+    .query("pieces")
+    .withIndex("by_request", (q) => q.eq("requestId", requestId))
+    .collect()
+  const requiredNotValidated = pieces.filter(
+    (p) => p.required && p.status !== "validated",
+  )
+  if (requiredNotValidated.length > 0) {
+    throw new Error(
+      `${requiredNotValidated.length} pièce(s) obligatoire(s) non validée(s).`,
+    )
+  }
+
+  const verifications = await ctx.db
+    .query("verifications")
+    .withIndex("by_request", (q) => q.eq("requestId", requestId))
+    .collect()
+  const verifsBlocking = verifications.filter(
+    (vv) => vv.status !== "ok" && vv.status !== "not_applicable",
+  )
+  if (verifsBlocking.length > 0) {
+    throw new Error(
+      `${verifsBlocking.length} vérification(s) non finalisée(s).`,
+    )
+  }
+}
 
 /* ---------- Marquer un courrier comme lu ---------- */
 export const markCorrespondenceRead = mutation({
@@ -436,13 +565,28 @@ export const sendCorrespondence = mutation({
   },
 })
 
-/* ---------- Préparer un acte (sans signer) + ouvrir circuit ---------- */
+/* ---------- Préparer un acte + ouvrir le circuit de signature ----------
+ *
+ * Crée le document `prepared` (ou réutilise un existant non-révoqué) et
+ * ouvre un circuit de signature multi-étapes.
+ *
+ * **Résolution des assignees** :
+ *   - Si `service.defaultSignatureCircuitTemplate` est défini, on résout
+ *     dynamiquement les assignees par rôle (premier agent actif de l'organisme
+ *     ayant le rôle requis pour chaque étape).
+ *   - Sinon, on tombe sur un circuit standard 3-étapes
+ *     (instructeur=me → chef_service → officier_signataire) avec les
+ *     `chefServiceId` / `officierId` passés explicitement par l'appelant.
+ *
+ * Préconditions : mêmes que `signAndIssue` (pièces + vérifs prêtes).
+ */
 export const prepareDocument = mutation({
   args: {
     token: v.string(),
     ref: v.string(),
-    chefServiceId: v.id("agents"),
-    officierId: v.id("agents"),
+    // Optionnels : fallback si le service n'a pas de defaultSignatureCircuitTemplate.
+    chefServiceId: v.optional(v.id("agents")),
+    officierId: v.optional(v.id("agents")),
   },
   handler: async (ctx, { token, ref, chefServiceId, officierId }) => {
     const me = await requireAgent(ctx, token)
@@ -453,72 +597,146 @@ export const prepareDocument = mutation({
     if (request.organismId !== me.organismId) {
       throw new Error("Demande hors de votre organisme.")
     }
+    if (
+      request.status === "issued" ||
+      request.status === "rejected" ||
+      request.status === "cancelled" ||
+      request.status === "to_sign"
+    ) {
+      throw new Error(
+        `Demande "${request.status}" — préparation impossible.`,
+      )
+    }
 
-    const citizen = await ctx.db.get(request.citizenId)
     const service = await ctx.db.get(request.serviceId)
-    if (!citizen || !service) throw new Error("Données manquantes.")
+    if (!service) throw new Error("Service introuvable.")
 
-    const now = Date.now()
-    const year = new Date(now).getFullYear()
-    const seq = String(Math.floor(Math.random() * 100000)).padStart(5, "0")
-    const actNumber = `${prefix(service.category)}-LBV-${year}-${seq}`
+    await assertPiecesAndVerificationsReady(ctx, request._id)
 
-    const documentId = await ctx.db.insert("documents", {
-      actNumber,
-      requestId: request._id,
-      citizenId: request.citizenId,
-      issuedByAgentId: me._id,
-      issuedByAgentNameSnapshot: me.name,
+    // Résolution des steps : template du service > arguments explicites
+    const steps = await resolveCircuitSteps(ctx, {
+      service,
       organismId: me.organismId,
-      title: service.variant
-        ? `${service.title} · ${service.variant}`
-        : service.title,
-      status: "prepared",
-      issuedAt: now,
-      sha256: `${randHex()}${randHex()}${randHex()}${randHex()}`,
-      qualifiedTimestamp: new Date(now).toISOString(),
-      qrCode: `GC-${prefix(service.category)}-${seq}`,
-      verificationCode: `GC-${prefix(service.category)}-${seq}`,
-      payload: {
-        name: citizen.name,
-        nip: citizen.nip,
-        birthDate: citizen.birthDate,
-        birthPlace: citizen.birthPlace,
-        fatherName: citizen.fatherName,
-        motherName: citizen.motherName,
-      },
+      preparerAgentId: me._id,
+      fallbackChefServiceId: chefServiceId,
+      fallbackOfficierId: officierId,
+    })
+
+    const documentId = await upsertPreparedDocument(ctx, {
+      request,
+      service,
+      preparerAgentId: me._id,
     })
 
     const circuitId = await createCircuit(ctx, {
       subjectKind: "document",
       subjectId: documentId,
-      steps: buildDocumentCircuit({
-        instructeurId: me._id,
-        chefServiceId,
-        officierId,
-      }),
+      steps,
     })
-    // L'étape 0 (instructeur) est déjà active à la création. Le caller doit
-    // immédiatement la valider pour passer au chef.
     await ctx.db.patch(documentId, { signatureCircuitId: circuitId })
-
     await ctx.db.patch(request._id, { status: "to_sign", progressPct: 75 })
 
+    const doc = await ctx.db.get(documentId)
     await ctx.db.insert("requestEvents", {
       requestId: request._id,
       kind: "status_change",
       title: "Acte préparé, circuit ouvert",
-      description: `${actNumber} en attente de visa.`,
+      description: `${doc?.actNumber ?? ""} en attente de visa (${steps.length} étape${steps.length > 1 ? "s" : ""}).`,
       actor: me.name,
       actorAgentId: me._id,
-      occurredAt: now,
+      occurredAt: Date.now(),
     })
 
-    return { documentId, circuitId, actNumber }
+    // Notification au premier assignee (autre que l'instructeur lui-même)
+    if (steps.length > 1 && steps[1]) {
+      await ctx.db.insert("notifications", {
+        recipientKind: "agent",
+        recipientId: String(steps[1].assigneeAgentId),
+        kind: "signature_requested",
+        severity: "info",
+        title: "Visa demandé",
+        body: `${doc?.actNumber ?? ""} attend votre approbation.`,
+        linkTo: `/signatures`,
+        linkedRequestId: request._id,
+        createdAt: Date.now(),
+      })
+    }
+
+    return { documentId, circuitId, actNumber: doc?.actNumber }
   },
 })
 
-/* ---------- Approuver l'étape active d'un circuit ---------- */
+/**
+ * Résout les agents assignés à chaque étape d'un circuit pour un service donné.
+ *
+ * Stratégie :
+ *   - Le préparateur (`preparerAgentId`) est toujours assigné à l'étape 0
+ *     (qui passera en `done` immédiatement par convention — il a préparé).
+ *   - Si le service a un `defaultSignatureCircuitTemplate` : pour chaque step
+ *     (au-delà de l'instructeur), on cherche un agent actif de l'organisme
+ *     ayant le `roleRequired`.
+ *   - Sinon (fallback legacy) : circuit standard 3-étapes avec les fallback*
+ *     passés explicitement.
+ */
+async function resolveCircuitSteps(
+  ctx: MutationCtx,
+  args: {
+    service: Doc<"services">
+    organismId: Id<"organisms">
+    preparerAgentId: Id<"agents">
+    fallbackChefServiceId?: Id<"agents">
+    fallbackOfficierId?: Id<"agents">
+  },
+) {
+  const template = args.service.defaultSignatureCircuitTemplate
+
+  if (template && template.steps.length > 0) {
+    // Templates : résoudre dynamiquement les agents par rôle dans l'organisme
+    const sortedSteps = [...template.steps].sort((a, b) => a.order - b.order)
+    const resolved = []
+    for (const step of sortedSteps) {
+      const candidate = await ctx.db
+        .query("agents")
+        .withIndex("by_organism_role", (q) =>
+          q.eq("organismId", args.organismId).eq("role", step.roleRequired),
+        )
+        .first()
+      if (!candidate) {
+        throw new Error(
+          `Aucun agent avec le rôle "${step.roleRequired}" dans cet organisme — circuit impossible.`,
+        )
+      }
+      resolved.push({
+        assigneeAgentId: candidate._id,
+        assigneeRole: step.roleRequired,
+      })
+    }
+    return resolved
+  }
+
+  // Fallback legacy : circuit 3-étapes instructeur → chef → officier
+  if (!args.fallbackChefServiceId || !args.fallbackOfficierId) {
+    throw new Error(
+      "Service sans circuit par défaut : chefServiceId et officierId sont requis.",
+    )
+  }
+  return buildDocumentCircuit({
+    instructeurId: args.preparerAgentId,
+    chefServiceId: args.fallbackChefServiceId,
+    officierId: args.fallbackOfficierId,
+  })
+}
+
+/* ---------- Approuver l'étape active d'un circuit ----------
+ *
+ * Permission statique : `signature.approve` (rôles susceptibles d'être
+ * assignés à un step). Vérification dynamique additionnelle dans `approveStep`
+ * (l'agent doit être l'assignee du step `active`).
+ *
+ * Si c'est la dernière étape, `lib/signatureCircuit.onCircuitCompleted`
+ * délègue à `lib/issuance.finalizeIssuance` qui patche la demande en `issued`,
+ * écrit l'archive squelette et notifie le citoyen.
+ */
 export const approveSignatureStep = mutation({
   args: {
     token: v.string(),
@@ -527,11 +745,21 @@ export const approveSignatureStep = mutation({
   },
   handler: async (ctx, { token, circuitId, comment }) => {
     const me = await requireAgent(ctx, token)
+    assertCan(actorFromAgent(me), "signature.approve")
     return approveStep(ctx, { circuitId, agentId: me._id, comment })
   },
 })
 
-/* ---------- Refuser l'étape active d'un circuit ---------- */
+/* ---------- Refuser l'étape active d'un circuit ----------
+ *
+ * Pour les circuits de documents : on **rebascule la demande à
+ * `in_instruction`** (décision § 11.3 de docs/request-processing-spec.md)
+ * pour que l'instructeur puisse corriger et re-préparer. La demande N'est
+ * PAS automatiquement marquée `rejected` — c'est un acte séparé via
+ * `rejectRequest` si l'instructeur abandonne.
+ *
+ * On notifie aussi le préparateur initial (issuedByAgentId) pour qu'il sache.
+ */
 export const refuseSignatureStep = mutation({
   args: {
     token: v.string(),
@@ -540,7 +768,47 @@ export const refuseSignatureStep = mutation({
   },
   handler: async (ctx, { token, circuitId, comment }) => {
     const me = await requireAgent(ctx, token)
+    assertCan(actorFromAgent(me), "signature.refuse")
     await refuseStep(ctx, { circuitId, agentId: me._id, comment })
+
+    // Pour les circuits de documents : rebascule de la demande en instruction
+    const circuit = await ctx.db.get(circuitId)
+    if (!circuit || circuit.subjectKind !== "document") return
+
+    const docId = circuit.subjectId as Id<"documents">
+    const doc = await ctx.db.get(docId)
+    if (!doc) return
+    const request = await ctx.db.get(doc.requestId)
+    if (!request) return
+
+    await ctx.db.patch(request._id, {
+      status: "in_instruction",
+      progressPct: 50,
+    })
+    await ctx.db.insert("requestEvents", {
+      requestId: request._id,
+      kind: "status_change",
+      title: "Visa refusé — retour instruction",
+      description: comment,
+      actor: me.name,
+      actorAgentId: me._id,
+      occurredAt: Date.now(),
+    })
+
+    // Notification au préparateur (instructeur initial) — sauf s'il est moi
+    if (doc.issuedByAgentId !== me._id) {
+      await ctx.db.insert("notifications", {
+        recipientKind: "agent",
+        recipientId: String(doc.issuedByAgentId),
+        kind: "request_status_change",
+        severity: "warning",
+        title: "Acte refusé par signataire",
+        body: `${doc.actNumber} a été refusé : ${comment.slice(0, 120)}${comment.length > 120 ? "…" : ""}`,
+        linkTo: `/demandes/${request.ref}`,
+        linkedRequestId: request._id,
+        createdAt: Date.now(),
+      })
+    }
   },
 })
 
@@ -645,9 +913,3 @@ function prefix(category: string) {
   return "GN"
 }
 
-function randHex(len = 16) {
-  return Math.floor(Math.random() * 0xffffffffffffff)
-    .toString(16)
-    .padStart(len, "0")
-    .slice(0, len)
-}
