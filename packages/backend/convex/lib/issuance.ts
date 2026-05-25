@@ -31,6 +31,7 @@
 
 import type { Id, Doc } from "../_generated/dataModel"
 import type { MutationCtx } from "../_generated/server"
+import { internal } from "../_generated/api"
 
 export interface FinalizeArgs {
   documentId: Id<"documents">
@@ -118,6 +119,14 @@ export async function finalizeIssuance(
 
   // ---------- 5. Archive squelette (idempotent) ----------
   await insertArchiveSkeleton(ctx, doc, service, citizen, sha256, qualifiedTimestamp)
+
+  // ---------- 5.bis. Schedule la génération PDF (action Node) ----------
+  // Le sha256 et le pdfStorageKey seront remplacés dans la foulée par les
+  // valeurs réelles calculées sur les bytes PDF. L'idempotence est gérée
+  // côté action (skip si pdfStorageKey existe déjà).
+  await ctx.scheduler.runAfter(0, internal.pdf.action.generateDocumentPdf, {
+    documentId: doc._id,
+  })
 
   // ---------- 6. Notification citoyen ----------
   await ctx.db.insert("notifications", {
