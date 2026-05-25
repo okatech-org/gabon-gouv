@@ -166,3 +166,196 @@ export async function rejectRequestAction(
     return fail(error)
   }
 }
+
+/* ============================================================
+   Bloc 3 — actions pièces, vérifs, assignation, signature
+   ============================================================ */
+
+const asId = (s: string) => s as unknown as never
+
+/** Valider une pièce uploadée. Réservé instructeur+. */
+export async function validatePieceAction(
+  ref: string,
+  pieceId: string,
+): Promise<ActionResult> {
+  const token = await requireSessionToken()
+  try {
+    await convex.mutation(api.admin.mutations.validatePiece, {
+      token,
+      pieceId: asId(pieceId),
+    })
+    revalidatePath(`/demandes/${ref}`)
+    return { ok: true, message: "Pièce validée." }
+  } catch (error) {
+    return fail(error)
+  }
+}
+
+/** Charger l'URL signée d'une pièce pour le viewer modal. */
+export async function getPieceViewUrlAction(
+  pieceId: string,
+): Promise<
+  ActionResult & {
+    url?: string | null
+    filename?: string
+    mimeType?: string
+    sizeBytes?: number
+  }
+> {
+  const token = await requireSessionToken()
+  try {
+    const res = await convex.query(api.admin.requests.getPieceViewUrl, {
+      token,
+      pieceId: asId(pieceId),
+    })
+    if (!res) return { ok: true, url: null }
+    return {
+      ok: true,
+      url: res.url ?? null,
+      filename: res.filename,
+      mimeType: res.mimeType,
+      sizeBytes: res.sizeBytes,
+    }
+  } catch (error) {
+    return fail(error)
+  }
+}
+
+/** Rejeter une pièce avec un motif. */
+export async function rejectPieceAction(
+  ref: string,
+  pieceId: string,
+  reason: string,
+): Promise<ActionResult> {
+  const trimmed = reason.trim()
+  if (!trimmed) return { ok: false, message: "Un motif est requis." }
+  const token = await requireSessionToken()
+  try {
+    await convex.mutation(api.admin.mutations.rejectPiece, {
+      token,
+      pieceId: asId(pieceId),
+      reason: trimmed,
+    })
+    revalidatePath(`/demandes/${ref}`)
+    return { ok: true, message: "Pièce rejetée." }
+  } catch (error) {
+    return fail(error)
+  }
+}
+
+/** Assigner une demande à un agent précis (ou à moi si agentId omis). */
+export async function assignRequestAction(
+  ref: string,
+  agentId: string | null,
+): Promise<ActionResult> {
+  const token = await requireSessionToken()
+  try {
+    await convex.mutation(api.admin.mutations.assignRequest, {
+      token,
+      ref,
+      agentId: agentId ? asId(agentId) : undefined,
+    })
+    revalidatePath(`/demandes/${ref}`)
+    revalidatePath("/demandes")
+    return { ok: true, message: "Demande assignée." }
+  } catch (error) {
+    return fail(error)
+  }
+}
+
+/** Basculer le statut d'une vérification automatique. */
+export async function setVerificationStatusAction(
+  ref: string,
+  verificationId: string,
+  status: "ok" | "ko" | "pending" | "not_applicable",
+  evidence?: string,
+): Promise<ActionResult> {
+  const token = await requireSessionToken()
+  try {
+    await convex.mutation(api.admin.mutations.setVerificationStatus, {
+      token,
+      verificationId: asId(verificationId),
+      status,
+      evidence: evidence?.trim() || undefined,
+    })
+    revalidatePath(`/demandes/${ref}`)
+    return { ok: true, message: "Vérification mise à jour." }
+  } catch (error) {
+    return fail(error)
+  }
+}
+
+/** Préparer le document + ouvrir le circuit de signature. */
+export async function prepareDocumentAction(
+  ref: string,
+  fallbackChefId?: string,
+  fallbackOfficierId?: string,
+): Promise<ActionResult> {
+  const token = await requireSessionToken()
+  try {
+    const res = await convex.mutation(api.admin.mutations.prepareDocument, {
+      token,
+      ref,
+      chefServiceId: fallbackChefId ? asId(fallbackChefId) : undefined,
+      officierId: fallbackOfficierId ? asId(fallbackOfficierId) : undefined,
+    })
+    revalidatePath(`/demandes/${ref}`)
+    return {
+      ok: true,
+      message: `Acte ${res.actNumber} préparé, circuit ouvert.`,
+      data: res,
+    }
+  } catch (error) {
+    return fail(error)
+  }
+}
+
+/** Approuver l'étape active d'un circuit de signature. */
+export async function approveSignatureStepAction(
+  ref: string | null,
+  circuitId: string,
+  comment?: string,
+): Promise<ActionResult> {
+  const token = await requireSessionToken()
+  try {
+    const res = await convex.mutation(api.admin.mutations.approveSignatureStep, {
+      token,
+      circuitId: asId(circuitId),
+      comment: comment?.trim() || undefined,
+    })
+    if (ref) revalidatePath(`/demandes/${ref}`)
+    revalidatePath("/signatures")
+    return {
+      ok: true,
+      message: res.circuitCompleted
+        ? "Dernière signature — acte émis."
+        : "Étape approuvée.",
+      data: res,
+    }
+  } catch (error) {
+    return fail(error)
+  }
+}
+
+/** Refuser l'étape active d'un circuit de signature (commentaire obligatoire). */
+export async function refuseSignatureStepAction(
+  ref: string | null,
+  circuitId: string,
+  comment: string,
+): Promise<ActionResult> {
+  const trimmed = comment.trim()
+  if (!trimmed) return { ok: false, message: "Un commentaire est requis." }
+  const token = await requireSessionToken()
+  try {
+    await convex.mutation(api.admin.mutations.refuseSignatureStep, {
+      token,
+      circuitId: asId(circuitId),
+      comment: trimmed,
+    })
+    if (ref) revalidatePath(`/demandes/${ref}`)
+    revalidatePath("/signatures")
+    return { ok: true, message: "Étape refusée — demande renvoyée à l'instruction." }
+  } catch (error) {
+    return fail(error)
+  }
+}

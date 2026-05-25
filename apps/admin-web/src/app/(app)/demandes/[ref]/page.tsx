@@ -26,20 +26,40 @@ import { MessageCitizenButton } from "./message-citizen-button"
 import { RequestPieceButton } from "./request-piece-button"
 import { SignAndIssueButton } from "./sign-button"
 import { TransferButton } from "./transfer-button"
+import { PiecesPanel } from "./pieces-panel"
+import { VerificationsPanel } from "./verifications-panel"
+import { AssignmentPicker } from "./assignment-picker"
+import { SignatureCircuitPanel } from "./signature-circuit-panel"
+import { PrepareDocumentButton } from "./prepare-button"
+
+/* ============================================================
+   Types — calqués sur api.admin.requests.getInstruction enrichi
+   ============================================================ */
 
 interface InstructionPiece {
+  id: string
+  requirementId?: string
   label: string
-  filename: string
-  sizeBytes: number
+  filename?: string
+  sizeBytes?: number
+  mimeType?: string
+  hasFile: boolean
   status: string
   ocrConfidence?: number
+  detectedDocType?: string
   required: boolean
+  rejectionReason?: string
+  validatedAt?: number
 }
 
 interface InstructionVerification {
+  id: string
   title: string
   description: string
   status: string
+  kind?: string
+  evidence?: string
+  automated: boolean
 }
 
 interface InstructionEvent {
@@ -50,38 +70,79 @@ interface InstructionEvent {
   occurredAt: number
 }
 
+interface InstructionCircuit {
+  id: string
+  status: string
+  startedAt: number
+  completedAt?: number
+  steps: {
+    id: string
+    order: number
+    assigneeRole: string
+    assigneeAgent: { id: string; name: string } | null
+    status: string
+    decidedAt?: number
+    comment?: string
+  }[]
+}
+
 interface InstructionData {
   ref: string
+  requestId: string
   status: string
   progressPct: number
   depositedAt: number
   dueAt?: number
+  issuedAt?: number
   internalNote: string
   payload?: Record<string, unknown>
-  service?: { title: string; slug: string }
-  assignedAgent?: { name: string; role: string }
+  urgent: boolean
+  service?: {
+    id: string
+    title: string
+    slug: string
+    category?: string
+    defaultCircuitStepsCount: number
+  }
+  variant?: { id: string; key: string; label: string } | null
+  assignedAgent?: { id: string; name: string; role: string } | null
   citizen?: {
+    id: string
     name: string
     nip: string
     email: string
     birthDate: string
     birthPlace: string
     parents: string | null
-  }
+  } | null
   pieces: InstructionPiece[]
   verifications: InstructionVerification[]
   events: InstructionEvent[]
+  document?: {
+    id: string
+    actNumber: string
+    status?: string
+    verificationCode?: string
+    sha256Short: string
+    issuedAt: number
+    hasPdf: boolean
+  } | null
+  circuit?: InstructionCircuit | null
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} Mo`
-  if (bytes >= 1_000) return `${(bytes / 1_000).toFixed(0)} Ko`
-  return `${bytes} o`
+interface TeamMembersResponse {
+  members: {
+    id: string
+    name: string
+    role: string
+    isMe: boolean
+  }[]
+  stats?: unknown
 }
 
-function verificationStatusOk(status: string): boolean {
-  return status === "ok" || status === "passed"
-}
+/* ============================================================
+   Helpers
+   ============================================================ */
 
 type PipelineStatus = "done" | "active" | "pending" | "error"
 
@@ -90,19 +151,16 @@ function eventToPipeline(events: InstructionEvent[]): {
   status: PipelineStatus
   duration?: string
 }[] {
-  // Pipeline canonique des étapes de traitement.
   const STAGES: { title: string; kinds: string[] }[] = [
-    { title: "Réception & contrôle", kinds: ["submitted", "received", "deposited"] },
-    { title: "Pré-instruction agent", kinds: ["assigned", "pre_instruction", "in_instruction"] },
-    { title: "Recherche registre", kinds: ["registry_check", "waiting_registry"] },
-    { title: "Visa officier", kinds: ["to_sign", "supervisor_review"] },
-    { title: "Signature & émission", kinds: ["signed", "issued"] },
+    { title: "Réception & contrôle", kinds: ["submission", "seal"] },
+    { title: "Pré-instruction agent", kinds: ["assignment"] },
+    { title: "Vérifications", kinds: ["verification"] },
+    { title: "Visa & signature", kinds: ["status_change", "signature"] },
+    { title: "Émission & livraison", kinds: ["delivery"] },
     { title: "Archivage probant", kinds: ["archived"] },
   ]
-
   const seen = new Set(events.map((e) => e.kind))
   let activeFound = false
-
   return STAGES.map((stage) => {
     const matched = stage.kinds.some((k) => seen.has(k))
     if (matched) {
@@ -116,6 +174,18 @@ function eventToPipeline(events: InstructionEvent[]): {
   })
 }
 
+const ROLES_FOR_ASSIGN: ReadonlyArray<string> = [
+  "agent_instructeur",
+  "agent_superviseur",
+  "chef_service",
+  "officier_signataire",
+  "admin_organisme",
+]
+
+/* ============================================================
+   Page
+   ============================================================ */
+
 export default async function AdminInstructionPage({
   params,
 }: {
@@ -125,28 +195,61 @@ export default async function AdminInstructionPage({
   if (!session) redirect("/login")
 
   const { ref } = await params
-  const [instruction, organisms] = await Promise.all([
+  const [instruction, organisms, teamResponse] = await Promise.all([
     convex.query(api.admin.requests.getInstruction, {
       token: session.token,
       ref,
     }) as Promise<InstructionData | null>,
     convex.query(api.admin.directory.listForPicker, { token: session.token }),
+    convex.query(api.admin.team.listTeamMembers, {
+      token: session.token,
+    }) as Promise<TeamMembersResponse>,
   ])
+  const team = teamResponse.members
 
   if (!instruction) notFound()
 
-  const { citizen, verifications, pieces, internalNote, events } = instruction
-  const okCount = verifications.filter((v) => verificationStatusOk(v.status)).length
-  const piecesValid = pieces.filter(
-    (p) => p.status === "uploaded" || p.status === "validated",
-  ).length
+  const {
+    citizen,
+    verifications,
+    pieces,
+    internalNote,
+    events,
+    circuit,
+    document: doc,
+  } = instruction
   const pipeline = eventToPipeline(events)
   const status = statusBadge(instruction.status)
   const dueLabel = instruction.dueAt ? relativeTime(instruction.dueAt) : "—"
 
-  // Premier événement pour récupérer "Acte n°" depuis le payload si présent.
-  const sourceOrder =
-    (instruction.payload as { actOrder?: string } | undefined)?.actOrder ?? "—"
+  // Candidates pour assignation : tous sauf moi (moi est géré par "M'assigner")
+  // et filtrés aux rôles capables de traiter une demande
+  const assignmentCandidates = team
+    .filter((m) => !m.isMe && ROLES_FOR_ASSIGN.includes(m.role))
+    .map((m) => ({ id: m.id, name: m.name, role: m.role }))
+
+  const chefCandidates = team
+    .filter((m) => m.role === "chef_service" || m.role === "admin_organisme")
+    .map((m) => ({ id: m.id, name: m.name, role: m.role }))
+  const officierCandidates = team
+    .filter((m) => m.role === "officier_signataire" || m.role === "admin_organisme")
+    .map((m) => ({ id: m.id, name: m.name, role: m.role }))
+
+  // Bouton "Préparer l'acte" : visible si demande dans état traitable
+  // (pas encore prepared/to_sign/issued/rejected/cancelled)
+  const canPrepare =
+    instruction.status === "in_instruction" &&
+    !circuit &&
+    !doc
+
+  // Bouton "Signer & émettre" raccourci : visible si service à 1 étape ou 0
+  const canShortcutSign =
+    instruction.service &&
+    instruction.service.defaultCircuitStepsCount <= 1 &&
+    !circuit &&
+    instruction.status !== "issued" &&
+    instruction.status !== "rejected" &&
+    instruction.status !== "cancelled"
 
   return (
     <>
@@ -170,12 +273,23 @@ export default async function AdminInstructionPage({
                 name="hash"
                 size={12}
                 style={{ verticalAlign: "middle", marginRight: 4 }}
+                aria-hidden="true"
               />
               {instruction.ref}
             </span>
             <Badge tone={status.tone} dot>
               {status.label}
             </Badge>
+            {instruction.urgent && (
+              <Badge tone="danger" size="sm" icon="alertTriangle">
+                Urgent
+              </Badge>
+            )}
+            {instruction.variant && (
+              <Badge tone="neutral" size="sm">
+                {instruction.variant.label}
+              </Badge>
+            )}
             {instruction.assignedAgent && (
               <Badge tone="neutral" icon="user">
                 {instruction.assignedAgent.name === session.agent.name
@@ -195,10 +309,24 @@ export default async function AdminInstructionPage({
               requestRef={instruction.ref}
               organisms={organisms}
             />
-            <SignAndIssueButton
-              requestRef={instruction.ref}
-              disabled={instruction.status === "issued"}
-            />
+            {canPrepare && (
+              <PrepareDocumentButton
+                requestRef={instruction.ref}
+                hasDefaultCircuit={
+                  (instruction.service?.defaultCircuitStepsCount ?? 0) > 0
+                }
+                candidatesByRole={{
+                  chef_service: chefCandidates,
+                  officier_signataire: officierCandidates,
+                }}
+              />
+            )}
+            {canShortcutSign && (
+              <SignAndIssueButton
+                requestRef={instruction.ref}
+                disabled={instruction.status === "issued"}
+              />
+            )}
           </>
         }
       />
@@ -247,11 +375,15 @@ export default async function AdminInstructionPage({
                 <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
                   <Avatar name={citizen.name} tone="green" size={40} />
                   <div>
-                    <div style={{ fontSize: 15, fontWeight: 700 }}>{citizen.name}</div>
+                    <div style={{ fontSize: 15, fontWeight: 700 }}>
+                      {citizen.name}
+                    </div>
                     <div style={{ fontSize: 12, color: "var(--ink-600)" }}>
                       NIP{" "}
-                      <span style={{ fontFamily: "var(--font-mono)" }}>{citizen.nip}</span> ·{" "}
-                      {citizen.email}
+                      <span style={{ fontFamily: "var(--font-mono)" }}>
+                        {citizen.nip}
+                      </span>{" "}
+                      · {citizen.email}
                     </div>
                   </div>
                 </div>
@@ -303,61 +435,59 @@ export default async function AdminInstructionPage({
             </Card>
           )}
 
-          {/* Vérifications automatiques */}
+          {/* Vérifications */}
           <Card>
-            <SectionHeading
-              title="Vérifications automatiques"
-              level={3}
-              action={
-                <Badge tone="archived" dot icon="check">
-                  {okCount}/{verifications.length} OK
-                </Badge>
-              }
+            <VerificationsPanel
+              requestRef={instruction.ref}
+              verifications={verifications}
             />
-            {verifications.map((v) => (
-              <div
-                key={v.title}
-                style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: 12,
-                  padding: "10px 0",
-                  borderBottom: "1px solid var(--ink-150)",
-                }}
-              >
-                <span
-                  style={{
-                    width: 22,
-                    height: 22,
-                    borderRadius: "50%",
-                    flexShrink: 0,
-                    background: verificationStatusOk(v.status)
-                      ? "var(--success-500)"
-                      : "var(--ink-300)",
-                    color: "white",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    marginTop: 2,
-                  }}
-                >
-                  <Icon
-                    name={verificationStatusOk(v.status) ? "check" : "clock"}
-                    size={12}
-                    stroke={3}
-                  />
-                </span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 600 }}>{v.title}</div>
-                  <div style={{ fontSize: 12.5, color: "var(--ink-600)" }}>
-                    {v.description}
-                  </div>
-                </div>
-              </div>
-            ))}
           </Card>
 
-          {/* Historique des événements */}
+          {/* Circuit de signature (si présent) */}
+          {circuit && (
+            <Card>
+              <SignatureCircuitPanel
+                requestRef={instruction.ref}
+                circuit={circuit}
+                meAgentId={session.agent._id}
+              />
+            </Card>
+          )}
+
+          {/* Document émis (si présent) */}
+          {doc && (doc.status === "issued" || instruction.status === "issued") && (
+            <Card>
+              <SectionHeading
+                title="Acte émis"
+                subtitle={`N° ${doc.actNumber}${doc.verificationCode ? ` · ${doc.verificationCode}` : ""}`}
+                level={3}
+              />
+              <div
+                style={{
+                  display: "flex",
+                  gap: 16,
+                  flexWrap: "wrap",
+                  fontSize: 13,
+                }}
+              >
+                <span>
+                  <strong>Empreinte :</strong>{" "}
+                  <span style={{ fontFamily: "var(--font-mono)" }}>
+                    {doc.sha256Short}…
+                  </span>
+                </span>
+                <span>
+                  <strong>Émis :</strong>{" "}
+                  {longDate(doc.issuedAt)}
+                </span>
+                <Badge tone={doc.hasPdf ? "success" : "warning"} size="sm">
+                  {doc.hasPdf ? "PDF disponible" : "PDF en cours de génération"}
+                </Badge>
+              </div>
+            </Card>
+          )}
+
+          {/* Historique */}
           <Card>
             <SectionHeading
               title="Historique d&apos;instruction"
@@ -400,9 +530,13 @@ export default async function AdminInstructionPage({
                       {shortDateTime(e.occurredAt)}
                     </span>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>{e.title}</div>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>
+                        {e.title}
+                      </div>
                       {e.description && (
-                        <div style={{ fontSize: 12.5, color: "var(--ink-600)" }}>
+                        <div
+                          style={{ fontSize: 12.5, color: "var(--ink-600)" }}
+                        >
                           {e.description}
                         </div>
                       )}
@@ -422,28 +556,6 @@ export default async function AdminInstructionPage({
                 ))
               )}
             </div>
-            <div
-              style={{
-                display: "flex",
-                gap: 16,
-                marginTop: 12,
-                fontSize: 12,
-                color: "var(--ink-600)",
-              }}
-            >
-              <span>
-                <b>Référence :</b>{" "}
-                <span style={{ fontFamily: "var(--font-mono)" }}>{instruction.ref}</span>
-              </span>
-              <span>
-                <b>Déposée :</b> {longDate(instruction.depositedAt)}
-              </span>
-              {sourceOrder !== "—" && (
-                <span>
-                  <b>Numéro d&apos;ordre :</b> {sourceOrder}
-                </span>
-              )}
-            </div>
           </Card>
         </div>
 
@@ -455,8 +567,10 @@ export default async function AdminInstructionPage({
             display: "flex",
             flexDirection: "column",
             gap: 14,
+            overflowY: "auto",
           }}
         >
+          {/* Échéance + Progress */}
           <Card padded={false}>
             <div style={{ padding: 14 }}>
               <div
@@ -473,7 +587,13 @@ export default async function AdminInstructionPage({
               <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4 }}>
                 {instruction.dueAt ? relativeTime(instruction.dueAt) : "—"}
               </div>
-              <div style={{ fontSize: 12, color: "var(--ink-600)", marginTop: 2 }}>
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "var(--ink-600)",
+                  marginTop: 2,
+                }}
+              >
                 {shortDateTime(instruction.depositedAt)}
                 {instruction.dueAt
                   ? ` → ${shortDateTime(instruction.dueAt)}`
@@ -487,6 +607,18 @@ export default async function AdminInstructionPage({
             </div>
           </Card>
 
+          {/* Assignation */}
+          <Card>
+            <AssignmentPicker
+              requestRef={instruction.ref}
+              currentAgent={instruction.assignedAgent ?? null}
+              meAgentId={session.agent._id}
+              meName={session.agent.name}
+              candidates={assignmentCandidates}
+            />
+          </Card>
+
+          {/* Pipeline */}
           <Card padded={false}>
             <div
               style={{
@@ -518,6 +650,7 @@ export default async function AdminInstructionPage({
             </div>
           </Card>
 
+          {/* Pièces (interactive Bloc 3) */}
           <Card padded={false}>
             <div
               style={{
@@ -540,39 +673,25 @@ export default async function AdminInstructionPage({
                 Pièces justificatives
               </div>
               <Badge tone="archived" size="sm">
-                {piecesValid}/{pieces.length}
+                {
+                  pieces.filter(
+                    (p) =>
+                      p.status === "uploaded" || p.status === "validated",
+                  ).length
+                }
+                /{pieces.length}
               </Badge>
             </div>
-            {pieces.map((p) => (
-              <div
-                key={p.filename}
-                style={{
-                  padding: "12px 16px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  borderBottom: "1px solid var(--ink-150)",
-                }}
-              >
-                <Icon name="fileText" size={16} style={{ color: "var(--primary-500)" }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{p.filename}</div>
-                  <div style={{ fontSize: 11.5, color: "var(--ink-500)" }}>
-                    {formatBytes(p.sizeBytes)}
-                    {typeof p.ocrConfidence === "number"
-                      ? ` · OCR ${p.ocrConfidence} %`
-                      : ""}
-                  </div>
-                </div>
-                <Icon name="eye" size={15} style={{ color: "var(--ink-500)" }} />
-                <Icon name="download" size={15} style={{ color: "var(--ink-500)" }} />
-              </div>
-            ))}
+            <PiecesPanel
+              requestRef={instruction.ref}
+              pieces={pieces}
+            />
             <div style={{ padding: 14 }}>
               <RequestPieceButton requestRef={instruction.ref} />
             </div>
           </Card>
 
+          {/* Note d'instruction */}
           <Card padded={false}>
             <div
               style={{

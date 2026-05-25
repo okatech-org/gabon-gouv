@@ -13,6 +13,7 @@
 
 import {
   Document,
+  type DocumentProps,
   Font,
   Page,
   StyleSheet,
@@ -234,20 +235,30 @@ export function ActeOfficial(input: ActePdfInput): React.ReactElement {
         {/* Corps : payload structuré */}
         {rows.length > 0 ? (
           <View style={styles.payloadGrid}>
-            {rows.map((row, idx) => (
-              <View
-                key={`${row.key}-${idx}`}
-                style={[
-                  styles.payloadRow,
-                  idx === rows.length - 1
-                    ? { borderBottomWidth: 0 }
-                    : {},
-                ]}
-              >
-                <Text style={styles.payloadKey}>{row.label}</Text>
-                <Text style={styles.payloadValue}>{row.value}</Text>
-              </View>
-            ))}
+            {rows.map((row, idx) => {
+              // React-PDF View types ne supportent pas `key` directement —
+              // on l'ajoute via React.createElement pour garder le typing propre.
+              const isLast = idx === rows.length - 1
+              return React.createElement(
+                View,
+                {
+                  key: `${row.key}-${idx}`,
+                  style: isLast
+                    ? [styles.payloadRow, { borderBottomWidth: 0 }]
+                    : styles.payloadRow,
+                },
+                React.createElement(
+                  Text,
+                  { style: styles.payloadKey },
+                  row.label,
+                ),
+                React.createElement(
+                  Text,
+                  { style: styles.payloadValue },
+                  row.value,
+                ),
+              )
+            })}
           </View>
         ) : (
           <View style={styles.payloadGrid}>
@@ -294,7 +305,9 @@ export function ActeOfficial(input: ActePdfInput): React.ReactElement {
  * Utilisé par l'action Node qui appelle ensuite ctx.storage.store + sha256.
  */
 export async function renderActePdfBytes(input: ActePdfInput): Promise<Uint8Array> {
-  const buffer = await renderToBuffer(ActeOfficial(input) as React.ReactElement)
+  const buffer = await renderToBuffer(
+    ActeOfficial(input) as React.ReactElement<DocumentProps>,
+  )
   // renderToBuffer renvoie un Buffer Node — on le convertit en Uint8Array
   // pour rester portable côté typage.
   return new Uint8Array(buffer)
