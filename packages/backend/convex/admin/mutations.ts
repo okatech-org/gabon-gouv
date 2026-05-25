@@ -42,14 +42,29 @@ export const assignRequest = mutation({
     }
 
     await ctx.db.patch(request._id, { assignedAgentId: targetAgentId })
+    const now = Date.now()
     await ctx.db.insert("requestEvents", {
       requestId: request._id,
       kind: "assignment",
       title: "Assignation",
       description: `${targetAgent.name} prend en charge le dossier.`,
       actor: me.name,
-      occurredAt: Date.now(),
+      occurredAt: now,
     })
+    // Notif à l'agent cible — sauf si auto-assignation (il sait déjà).
+    if (targetAgentId !== me._id) {
+      await ctx.db.insert("notifications", {
+        recipientKind: "agent",
+        recipientId: String(targetAgentId),
+        kind: "assignment",
+        severity: "info",
+        title: "Nouvelle assignation",
+        body: `Vous êtes désigné pour traiter la demande ${request.ref}.`,
+        linkTo: `/demandes/${request.ref}`,
+        linkedRequestId: request._id,
+        createdAt: now,
+      })
+    }
   },
 })
 
@@ -69,13 +84,26 @@ export const requestPiece = mutation({
     })
 
     await ctx.db.patch(request._id, { status: "waiting_pieces" })
+    const now = Date.now()
     await ctx.db.insert("requestEvents", {
       requestId: request._id,
       kind: "piece_request",
       title: "Pièce demandée",
       description: `Demande de pièce : ${label}.`,
       actor: me.name,
-      occurredAt: Date.now(),
+      occurredAt: now,
+    })
+    // Notif citoyen — il doit uploader la pièce.
+    await ctx.db.insert("notifications", {
+      recipientKind: "citizen",
+      recipientId: String(request.citizenId),
+      kind: "piece_requested",
+      severity: "warning",
+      title: "Pièce complémentaire demandée",
+      body: `${label} — réf. ${request.ref}. Connectez-vous pour téléverser le document.`,
+      linkTo: `/mon-espace/demarches/${request.ref}`,
+      linkedRequestId: request._id,
+      createdAt: now,
     })
   },
 })
@@ -539,6 +567,18 @@ export const rejectRequest = mutation({
       actor: me.name,
       actorAgentId: me._id,
       occurredAt: now,
+    })
+    // Notif citoyen — il doit savoir que sa demande est rejetée + le motif.
+    await ctx.db.insert("notifications", {
+      recipientKind: "citizen",
+      recipientId: String(request.citizenId),
+      kind: "request_status_change",
+      severity: "danger",
+      title: "Demande refusée",
+      body: `Réf. ${request.ref} — motif : ${reason.slice(0, 140)}${reason.length > 140 ? "…" : ""}`,
+      linkTo: `/mon-espace/demarches/${request.ref}`,
+      linkedRequestId: request._id,
+      createdAt: now,
     })
   },
 })
