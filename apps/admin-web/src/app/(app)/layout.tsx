@@ -22,11 +22,16 @@ export default async function AppShellLayout({ children }: { children: ReactNode
   // demandes en attente + correspondances non lues pour l'agent connecté.
   const sidebarCounts = await convex
     .query(api.admin.dashboard.getSidebarCounts, { token: session.token })
-    .catch(() => ({ queue: 0, correspondenceUnread: 0 }))
+    .catch(() => ({
+      queue: 0,
+      correspondenceUnread: 0,
+      signaturesPending: 0,
+    }))
 
   const nav = buildAdminNav({
     queue: sidebarCounts.queue,
     correspondenceUnread: sidebarCounts.correspondenceUnread,
+    signaturesPending: sidebarCounts.signaturesPending,
   })
 
   return (

@@ -102,21 +102,47 @@ export const getSidebarCounts = query({
     const agent = await requireAgent(ctx, token)
     const orgId = agent.organismId
 
-    const [queue, assignedToMe, lateOverdue, correspondenceUnread] =
-      await Promise.all([
-        aggRequestsByOrgStatus.count(ctx, {
-          namespace: aggKeys.orgStatus(orgId, "submitted"),
-        }),
-        aggRequestsByOrgAgent.count(ctx, {
-          namespace: aggKeys.orgAgent(orgId, agent._id),
-        }),
-        countLate(ctx, orgId),
-        countCorrespondenceUnread(ctx, orgId, agent._id),
-      ])
+    const [
+      queue,
+      assignedToMe,
+      lateOverdue,
+      correspondenceUnread,
+      signaturesPending,
+    ] = await Promise.all([
+      aggRequestsByOrgStatus.count(ctx, {
+        namespace: aggKeys.orgStatus(orgId, "submitted"),
+      }),
+      aggRequestsByOrgAgent.count(ctx, {
+        namespace: aggKeys.orgAgent(orgId, agent._id),
+      }),
+      countLate(ctx, orgId),
+      countCorrespondenceUnread(ctx, orgId, agent._id),
+      countMySignaturesPending(ctx, agent._id),
+    ])
 
-    return { queue, assignedToMe, lateOverdue, correspondenceUnread }
+    return {
+      queue,
+      assignedToMe,
+      lateOverdue,
+      correspondenceUnread,
+      signaturesPending,
+    }
   },
 })
+
+/** Count des steps `active` assignés à l'agent (badge sidebar /signatures). */
+async function countMySignaturesPending(
+  ctx: QueryCtx,
+  agentId: Id<"agents">,
+): Promise<number> {
+  const rows = await ctx.db
+    .query("signatureCircuitSteps")
+    .withIndex("by_assignee_status", (q) =>
+      q.eq("assigneeAgentId", agentId).eq("status", "active"),
+    )
+    .collect()
+  return rows.length
+}
 
 async function countLate(
   ctx: QueryCtx,

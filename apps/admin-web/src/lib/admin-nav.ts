@@ -3,6 +3,7 @@ import type { SidebarItem } from "@workspace/ui"
 export interface SidebarBadges {
   queue?: number
   correspondenceUnread?: number
+  signaturesPending?: number
 }
 
 /**
@@ -25,6 +26,13 @@ export function buildAdminNav(badges: SidebarBadges = {}): SidebarItem[] {
       label: "Dossiers citoyens",
       icon: "folder",
       href: "/dossiers/184127600504",
+    },
+    {
+      id: "signatures",
+      label: "Mes signatures",
+      icon: "edit",
+      href: "/signatures",
+      count: badges.signaturesPending,
     },
     {
       id: "documents",
