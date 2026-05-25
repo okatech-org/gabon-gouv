@@ -1,5 +1,6 @@
 import { v } from "convex/values"
 import { query } from "../_generated/server"
+import type { MutationCtx } from "../_generated/server"
 import { mutation } from "../lib/triggers"
 import type { Id } from "../_generated/dataModel"
 import { requireCitizen } from "./auth"
@@ -298,6 +299,12 @@ export const submitRequest = mutation({
       occurredAt: now + 1000,
     })
 
+    // Set de vérifications automatiques stub (décision § 11.7 du Bloc 3).
+    // L'identité est marquée `ok` puisque l'IDN sub est présent, les autres
+    // restent `pending` — l'agent les fera basculer manuellement (ou un job
+    // automatique plus tard via setVerificationStatus).
+    await seedDefaultVerifications(ctx, requestId, Boolean(citizen.identityVerified))
+
     // Supprime le brouillon associé (si existant) — un seul brouillon par
     // (citizen, service) selon la convention de drafts.ts
     const drafts = await ctx.db
@@ -311,6 +318,41 @@ export const submitRequest = mutation({
     }
 
     return { ref, requestId }
+  },
+})
+
+/**
+ * URL signée du PDF émis pour une demande du citoyen connecté.
+ * Renvoie `null` si la demande n'est pas encore émise OU si le PDF n'a pas
+ * encore été généré (v1 tant que la génération PDF n'est pas branchée).
+ *
+ * Vérifie que la demande appartient bien au citoyen courant.
+ */
+export const getMyDocumentPdfUrl = query({
+  args: { idnSub: v.string(), ref: v.string() },
+  handler: async (ctx, { idnSub, ref }) => {
+    const { citizen } = await requireCitizen(ctx, idnSub)
+    const request = await ctx.db
+      .query("requests")
+      .withIndex("by_ref", (q) => q.eq("ref", ref))
+      .unique()
+    if (!request) return null
+    if (request.citizenId !== citizen._id) {
+      throw new Error("Cette demande ne vous appartient pas.")
+    }
+    const doc = await ctx.db
+      .query("documents")
+      .withIndex("by_request", (q) => q.eq("requestId", request._id))
+      .filter((q) => q.neq(q.field("status"), "revoked"))
+      .first()
+    if (!doc || !doc.pdfStorageKey) return null
+    const url = await ctx.storage.getUrl(doc.pdfStorageKey)
+    return {
+      url,
+      actNumber: doc.actNumber,
+      verificationCode: doc.verificationCode ?? null,
+      issuedAt: doc.issuedAt,
+    }
   },
 })
 
@@ -446,6 +488,56 @@ function formatRelativeMs(ms: number): string {
   const days = ms / (24 * 60 * 60 * 1000)
   if (days < 1) return `${Math.round(ms / (60 * 60 * 1000))} h`
   return `${days.toFixed(1)} j`
+}
+
+/**
+ * Insère un set de vérifications par défaut pour une demande fraîchement
+ * déposée (décision § 11.7 du Bloc 3). Stub — pas d'intégration réelle :
+ *   - `identity` → `ok` si l'identité du citoyen est marquée vérifiée
+ *     (auth IDN), sinon `pending` (à confirmer par l'agent).
+ *   - `data_consistency` → `pending` (vérif manuelle par l'instructeur).
+ *   - `duplicate_detection` → `pending` (sera automatisé via un job).
+ *
+ * Plus de vérifs peuvent être ajoutées par l'agent via une éventuelle
+ * mutation `addVerification` (hors scope v1).
+ */
+async function seedDefaultVerifications(
+  ctx: MutationCtx,
+  requestId: Id<"requests">,
+  identityVerified: boolean,
+): Promise<void> {
+  const now = Date.now()
+  await ctx.db.insert("verifications", {
+    requestId,
+    title: "Identité du déposant",
+    description: identityVerified
+      ? "Identité IDN vérifiée au login."
+      : "Identité à confirmer manuellement.",
+    kind: "identity",
+    status: identityVerified ? "ok" : "pending",
+    evidence: identityVerified ? "IDN OAuth" : undefined,
+    automated: true,
+    performedAt: identityVerified ? now : undefined,
+    order: 0,
+  })
+  await ctx.db.insert("verifications", {
+    requestId,
+    title: "Cohérence des données",
+    description: "Croisement payload demande × profil citoyen.",
+    kind: "data_consistency",
+    status: "pending",
+    automated: false,
+    order: 1,
+  })
+  await ctx.db.insert("verifications", {
+    requestId,
+    title: "Recherche de doublon",
+    description: "Vérification anti-doublon sur le citoyen et le service.",
+    kind: "duplicate_detection",
+    status: "pending",
+    automated: true,
+    order: 2,
+  })
 }
 
 function servicePrefix(category: string): string {

@@ -19,6 +19,7 @@ import type * as admin_requests from "../admin/requests.js";
 import type * as admin_serviceRequirements from "../admin/serviceRequirements.js";
 import type * as admin_serviceVariants from "../admin/serviceVariants.js";
 import type * as admin_services from "../admin/services.js";
+import type * as admin_signatures from "../admin/signatures.js";
 import type * as admin_team from "../admin/team.js";
 import type * as aggregates from "../aggregates.js";
 import type * as auth from "../auth.js";
@@ -82,6 +83,7 @@ declare const fullApi: ApiFromModules<{
   "admin/serviceRequirements": typeof admin_serviceRequirements;
   "admin/serviceVariants": typeof admin_serviceVariants;
   "admin/services": typeof admin_services;
+  "admin/signatures": typeof admin_signatures;
   "admin/team": typeof admin_team;
   aggregates: typeof aggregates;
   auth: typeof auth;

@@ -15,7 +15,10 @@ import {
   refuseStep,
 } from "../lib/signatureCircuit"
 import { finalizeIssuance } from "../lib/issuance"
-import { confidentialityLevelValidator } from "../lib/enums"
+import {
+  confidentialityLevelValidator,
+  verificationStatusValidator,
+} from "../lib/enums"
 
 /* ---------- Assigner une demande à un agent ---------- */
 export const assignRequest = mutation({
@@ -454,6 +457,52 @@ export const rejectPiece = mutation({
       actor: me.name,
       actorAgentId: me._id,
       occurredAt: Date.now(),
+    })
+  },
+})
+
+/* ---------- Mettre à jour le statut d'une vérification automatique ---------- */
+export const setVerificationStatus = mutation({
+  args: {
+    token: v.string(),
+    verificationId: v.id("verifications"),
+    status: verificationStatusValidator,
+    evidence: v.optional(v.string()),
+  },
+  handler: async (ctx, { token, verificationId, status, evidence }) => {
+    const me = await requireAgent(ctx, token)
+    assertCan(actorFromAgent(me), "verification.update")
+
+    const verification = await ctx.db.get(verificationId)
+    if (!verification) throw new Error("Vérification introuvable.")
+    const request = await ctx.db.get(verification.requestId)
+    if (!request || request.organismId !== me.organismId) {
+      throw new Error("Vérification hors de votre périmètre.")
+    }
+
+    const now = Date.now()
+    await ctx.db.patch(verificationId, {
+      status,
+      evidence: evidence?.trim() || verification.evidence,
+      performedAt: now,
+      performedByAgentId: me._id,
+    })
+
+    await ctx.db.insert("requestEvents", {
+      requestId: request._id,
+      kind: "verification",
+      title: `Vérification : ${verification.title}`,
+      description:
+        status === "ok"
+          ? `Validée${evidence ? ` (${evidence})` : ""}.`
+          : status === "ko"
+            ? `Échec${evidence ? ` : ${evidence}` : ""}.`
+            : status === "not_applicable"
+              ? "Marquée non applicable."
+              : "En cours.",
+      actor: me.name,
+      actorAgentId: me._id,
+      occurredAt: now,
     })
   },
 })
