@@ -14,6 +14,7 @@ import { api } from "@workspace/backend/generated"
 import { getTemplateVariables } from "@workspace/mocks/admin"
 import { convex } from "@/lib/convex"
 import { getCurrentAgent } from "@/lib/current-agent"
+import { GenerationActions } from "./generation-actions"
 
 interface InstructionForGenerationCitizen {
   name: string
@@ -26,8 +27,20 @@ interface InstructionForGenerationCitizen {
 
 interface InstructionForGeneration {
   ref: string
-  service?: { title: string; slug: string }
+  status: string
+  service?: {
+    title: string
+    slug: string
+    defaultCircuitStepsCount?: number
+  }
   citizen?: InstructionForGenerationCitizen
+  document?: {
+    id: string
+    actNumber: string
+    status?: string
+    verificationCode?: string
+    hasPdf: boolean
+  } | null
 }
 
 const Var = ({ children }: { children: ReactNode }) => (
@@ -78,17 +91,14 @@ export default async function AdminGenerationPage({
         title={`Générer un ${serviceTitle.toLowerCase()}`}
         subtitle={`Template officiel · pré-rempli depuis la demande ${instruction.ref}`}
         actions={
-          <>
-            <Button variant="ghost" icon="save">
-              Sauvegarder brouillon
-            </Button>
-            <Button variant="secondary" icon="eye">
-              Prévisualiser PDF
-            </Button>
-            <Button variant="success" icon="shieldCheck">
-              Signer &amp; émettre
-            </Button>
-          </>
+          <GenerationActions
+            requestRef={instruction.ref}
+            hasMultiStepCircuit={
+              (instruction.service?.defaultCircuitStepsCount ?? 0) > 1
+            }
+            status={instruction.status}
+            document={instruction.document ?? null}
+          />
         }
       />
       <div

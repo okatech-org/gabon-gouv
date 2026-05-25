@@ -154,6 +154,9 @@ export const getMyRequest = query({
       subtitle: `Demande déposée le ${formatDateLong(request.depositedAt)} · ${organism?.shortName ?? organism?.name ?? ""}`,
       status: label,
       statusTone: tone,
+      // rawStatus = enum brut (issued/in_instruction/...) pour les composants
+      // qui ont besoin de la valeur technique (ex. bouton télécharger PDF).
+      rawStatus: request.status,
       progress: request.progressPct,
       estimatedDelay: request.dueAt
         ? `~ ${formatRelativeMs(request.dueAt - Date.now())}`

@@ -15,6 +15,7 @@ import { convex } from "@/lib/convex"
 import { requireCurrentSession } from "@/lib/current-citizen"
 import { CancelRequestButton } from "./cancel-request-button"
 import { SendMessageBox } from "./send-message-box"
+import { DownloadPdfButton } from "./download-pdf-button"
 
 export default async function CitizenTrackingPage({
   params,
@@ -353,25 +354,16 @@ export default async function CitizenTrackingPage({
             >
               Actions
             </div>
-            <Button
-              variant="outline"
-              icon="download"
-              style={{ width: "100%", justifyContent: "flex-start" }}
-            >
-              Télécharger le récépissé
-            </Button>
-            <div style={{ height: 6 }} />
-            <Button
-              variant="ghost"
-              icon="xCircle"
-              style={{
-                width: "100%",
-                justifyContent: "flex-start",
-                color: "var(--danger-500)",
-              }}
-            >
-              Annuler la demande
-            </Button>
+            <DownloadPdfButton
+              requestRef={tracking.ref}
+              status={tracking.rawStatus}
+            />
+            {tracking.canCancel && (
+              <>
+                <div style={{ height: 12 }} />
+                <CancelRequestButton requestRef={tracking.ref} />
+              </>
+            )}
           </Card>
         </div>
       </div>

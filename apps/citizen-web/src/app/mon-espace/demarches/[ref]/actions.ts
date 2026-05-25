@@ -45,6 +45,38 @@ export async function cancelMyRequestAction(
   }
 }
 
+/**
+ * Charge l'URL signée du PDF de l'acte émis pour la demande du citoyen.
+ * Renvoie `{ ok: true, url: null }` si la demande n'est pas encore émise
+ * OU si le PDF est encore en cours de génération.
+ */
+export async function getMyPdfUrlAction(
+  ref: string,
+): Promise<
+  ActionResult & {
+    url?: string | null
+    actNumber?: string
+    verificationCode?: string | null
+  }
+> {
+  const session = await requireCurrentSession()
+  try {
+    const res = await convex.query(api.citizen.requests.getMyDocumentPdfUrl, {
+      idnSub: session.idnSub,
+      ref,
+    })
+    if (!res) return { ok: true, url: null }
+    return {
+      ok: true,
+      url: res.url ?? null,
+      actNumber: res.actNumber,
+      verificationCode: res.verificationCode,
+    }
+  } catch (error) {
+    return fail(error)
+  }
+}
+
 export async function sendMessageAction(
   ref: string,
   body: string,
