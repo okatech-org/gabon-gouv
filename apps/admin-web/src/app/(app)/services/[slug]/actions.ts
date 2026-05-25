@@ -245,6 +245,41 @@ export async function updateRequirementAction(
     patch.autofillSource = autofillRaw
   }
 
+  // variantOverrides : passé en JSON sérialisé depuis le client. On reparse,
+  // on filtre les entrées « par défaut » (= comme la règle générale, donc inutiles
+  // à persister), et on valide les types de documents acceptés.
+  // Une entrée absente du tableau signifie « pas d'override pour cette variante ».
+  const overridesRaw = formData.get("variantOverrides")
+  if (typeof overridesRaw === "string" && overridesRaw.length > 0) {
+    try {
+      const parsed = JSON.parse(overridesRaw) as Array<{
+        variantId: string
+        required: boolean
+        acceptedDocTypes?: string[] | null
+      }>
+      if (!Array.isArray(parsed)) {
+        return { ok: false, message: "Format de variantOverrides invalide." }
+      }
+      patch.variantOverrides = parsed.map((o) => {
+        const docTypes = Array.isArray(o.acceptedDocTypes)
+          ? o.acceptedDocTypes.filter((d) =>
+              PIECE_DOC_TYPES.includes(d as never),
+            )
+          : undefined
+        return {
+          variantId: asId(o.variantId),
+          required: Boolean(o.required),
+          // On omet acceptedDocTypes si vide pour utiliser ceux de la règle générale
+          ...(docTypes && docTypes.length > 0
+            ? { acceptedDocTypes: docTypes }
+            : {}),
+        }
+      })
+    } catch {
+      return { ok: false, message: "variantOverrides : JSON invalide." }
+    }
+  }
+
   try {
     await convex.mutation(api.admin.serviceRequirements.updateRequirement, {
       token: session.token,

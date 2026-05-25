@@ -60,6 +60,11 @@ interface Requirement {
   acceptedDocTypes: string[]
   autofillSource: string | null
   order: number
+  variantOverrides: Array<{
+    variantId: string
+    required: boolean
+    acceptedDocTypes: string[] | null
+  }>
 }
 
 interface TemplateRow {
@@ -233,6 +238,12 @@ export function ServiceTabsContainer(props: ServiceTabsContainerProps) {
               serviceId={props.serviceId}
               readOnly={props.readOnly}
               requirements={props.requirements}
+              variants={props.variants.map((v) => ({
+                id: v.id,
+                key: v.key,
+                label: v.label,
+                isDefault: v.isDefault,
+              }))}
             />
           </div>
         )}

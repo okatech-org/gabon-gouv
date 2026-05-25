@@ -93,7 +93,7 @@
 - [x] Champs : nombre de copies, email notification, beneficiary kind, urgent + justification
 - [x] Consentements snapshot (honneur + RGPD) capturés au submit
 - [x] Pré-remplissage RGPP visible (champs grisés via readonlyStyle)
-- [ ] variantOverrides UI (mapping variantId↔key pour filtrer pieces selon variante choisie — TODO)
+- [x] variantOverrides UI : éditeur tri-state (Hériter / Obligatoire / Facultative) par variante dans le Dialog d'édition de pièce + résolution dans le wizard citoyen (override.required + acceptedDocTypes appliqués selon la variante sélectionnée)
 
 ### Validation
 - [x] Typecheck backend + citizen-web : 0 erreur
@@ -103,7 +103,7 @@
 - [ ] Une demande déposée a un payload conforme au schema, consents snapshot, et apparaît côté agent (à tester)
 - [ ] RGAA : focus management dans les inputs file + drag-drop accessible clavier
 
-✅ **Bloc 2 clôturé** : [x] (sous réserve validation manuelle + petit TODO variantOverrides UI)
+✅ **Bloc 2 clôturé** : [x] (sous réserve validation manuelle)
 
 ---
 

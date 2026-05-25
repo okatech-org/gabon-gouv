@@ -149,7 +149,7 @@ export function DepositWizard({
     return variants.find((v) => v.isDefault)?.key ?? variants[0]?.key
   })
   const [pieces, setPieces] = useState<PieceState[]>(() =>
-    initialPiecesFromRequirements(requirements, variantKey),
+    initialPiecesFromRequirements(requirements, variants, variantKey),
   )
   const [honor, setHonor] = useState(false)
   const [rgpd, setRgpd] = useState(false)
@@ -187,17 +187,28 @@ export function DepositWizard({
   // ============= Mise à jour pièces si la variante change =============
   useEffect(() => {
     setPieces((current) => {
-      const next = initialPiecesFromRequirements(requirements, variantKey)
-      // Conserve les pieces déjà uploadées si elles correspondent
+      const next = initialPiecesFromRequirements(
+        requirements,
+        variants,
+        variantKey,
+      )
+      // Conserve les pieces déjà uploadées (dérive `required`/`acceptedDocTypes`
+      // depuis la nouvelle résolution, mais garde l'état d'upload).
       return next.map((nextPiece) => {
         const existing = current.find(
           (p) => p.requirementId === nextPiece.requirementId,
         )
-        if (existing?.pieceId) return existing
+        if (existing?.pieceId) {
+          return {
+            ...existing,
+            required: nextPiece.required,
+            acceptedDocTypes: nextPiece.acceptedDocTypes,
+          }
+        }
         return nextPiece
       })
     })
-  }, [requirements, variantKey])
+  }, [requirements, variants, variantKey])
 
   // ============= Helpers UI =============
 
@@ -545,24 +556,23 @@ function buildDefaultPayload(
 
 function initialPiecesFromRequirements(
   requirements: RequirementProp[],
+  variants: VariantProp[],
   variantKey: string | undefined,
 ): PieceState[] {
+  // Map key → id pour résoudre les overrides (qui sont keyés par variantId)
+  const selectedVariantId = variants.find((v) => v.key === variantKey)?.id
   return requirements.map((r) => {
-    // Résoudre les variantOverrides : on cherche la variante sélectionnée
-    const matchingOverride = r.variantOverrides.find(
-      // L'override est gardé par variantId, mais on ne l'a qu'à partir du key
-      // côté UI. Toutefois ici on n'a accès qu'au key, donc on fait sans.
-      // C'est OK pour MVP — l'override par variante demande la map id->key
-      // mais le front actuel n'en a pas besoin pour le rendu basique.
-      (_) => false,
-    )
-    void variantKey
-    void matchingOverride
+    // Si on a une variante sélectionnée, on cherche un override qui la cible.
+    // Quand il existe, il remplace `required` et (optionnellement)
+    // `acceptedDocTypes` pour cette pièce dans le contexte de cette variante.
+    const override = selectedVariantId
+      ? r.variantOverrides.find((o) => o.variantId === selectedVariantId)
+      : undefined
     return {
       requirementId: r.id,
       label: r.label,
-      required: r.required,
-      acceptedDocTypes: r.acceptedDocTypes,
+      required: override?.required ?? r.required,
+      acceptedDocTypes: override?.acceptedDocTypes ?? r.acceptedDocTypes,
       status: "idle",
     }
   })

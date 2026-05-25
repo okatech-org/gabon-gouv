@@ -227,6 +227,11 @@ export default async function ServiceDetailPage({
           acceptedDocTypes: r.acceptedDocTypes,
           autofillSource: r.autofillSource,
           order: r.order,
+          variantOverrides: r.variantOverrides.map((o) => ({
+            variantId: String(o.variantId),
+            required: o.required,
+            acceptedDocTypes: o.acceptedDocTypes ?? null,
+          })),
         }))}
         templatesByVariant={detail.templatesByVariant.map((tv) => ({
           variantId: String(tv.variantId),

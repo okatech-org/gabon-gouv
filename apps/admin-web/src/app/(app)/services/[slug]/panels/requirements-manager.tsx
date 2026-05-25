@@ -41,12 +41,25 @@ interface Requirement {
   acceptedDocTypes: string[]
   autofillSource: string | null
   order: number
+  variantOverrides: Array<{
+    variantId: string
+    required: boolean
+    acceptedDocTypes: string[] | null
+  }>
+}
+
+interface VariantRef {
+  id: string
+  key: string
+  label: string
+  isDefault: boolean
 }
 
 interface Props {
   slug: string
   serviceId: string
   requirements: Requirement[]
+  variants: VariantRef[]
   readOnly?: boolean
 }
 
@@ -54,6 +67,7 @@ export function RequirementsManager({
   slug,
   serviceId,
   requirements,
+  variants,
   readOnly,
 }: Props) {
   const router = useRouter()
@@ -163,6 +177,7 @@ export function RequirementsManager({
               <Th scope="col">Types acceptés</Th>
               <Th scope="col">Obligatoire</Th>
               <Th scope="col">Pré-remplissage</Th>
+              {variants.length > 1 && <Th scope="col">Par variante</Th>}
               <Th scope="col">
                 <span className="sr-only">Actions</span>
               </Th>
@@ -236,6 +251,20 @@ export function RequirementsManager({
                 <Td style={{ fontSize: 12, color: "var(--ink-600)" }}>
                   {AUTOFILL_LABELS[req.autofillSource ?? "none"]}
                 </Td>
+                {variants.length > 1 && (
+                  <Td style={{ fontSize: 12 }}>
+                    {req.variantOverrides.length === 0 ? (
+                      <span style={{ color: "var(--ink-500)" }}>
+                        Règle générale
+                      </span>
+                    ) : (
+                      <Badge tone="info" size="sm">
+                        {req.variantOverrides.length} override
+                        {req.variantOverrides.length > 1 ? "s" : ""}
+                      </Badge>
+                    )}
+                  </Td>
+                )}
                 <Td>
                   {!readOnly && (
                     <div style={{ display: "inline-flex", gap: 4 }}>
@@ -276,6 +305,7 @@ export function RequirementsManager({
       {showAdd && (
         <RequirementDialog
           title="Ajouter une pièce requise"
+          variants={variants}
           onClose={() => setShowAdd(false)}
           onSubmit={(data) => addRequirementAction(slug, serviceId, data)}
         />
@@ -284,6 +314,7 @@ export function RequirementsManager({
         <RequirementDialog
           title="Éditer la pièce"
           initial={requirements.find((r) => r.id === editingId)}
+          variants={variants}
           onClose={() => setEditingId(null)}
           onSubmit={(data) =>
             updateRequirementAction(slug, editingId, data)
@@ -311,14 +342,26 @@ function iconBtnStyle(disabled: boolean) {
   } as const
 }
 
+/**
+ * Tri-state override par variante :
+ *   - "inherit" : pas d'override, on suit la règle générale (default)
+ *   - "required" : pièce obligatoire pour cette variante
+ *   - "optional" : pièce facultative pour cette variante
+ *
+ * On garde un type interne (et non `boolean | null`) pour rendre les radios lisibles.
+ */
+type OverrideState = "inherit" | "required" | "optional"
+
 function RequirementDialog({
   title,
   initial,
+  variants,
   onClose,
   onSubmit,
 }: {
   title: string
   initial?: Requirement
+  variants: VariantRef[]
   onClose: () => void
   onSubmit: (data: FormData) => Promise<{ ok: boolean; message?: string }>
 }) {
@@ -326,9 +369,41 @@ function RequirementDialog({
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
 
+  // État des overrides : Map variantId → state. Initialisé depuis initial.variantOverrides.
+  const [overrides, setOverrides] = useState<Map<string, OverrideState>>(() => {
+    const m = new Map<string, OverrideState>()
+    for (const v of variants) {
+      const existing = initial?.variantOverrides.find(
+        (o) => o.variantId === v.id,
+      )
+      m.set(
+        v.id,
+        existing ? (existing.required ? "required" : "optional") : "inherit",
+      )
+    }
+    return m
+  })
+
+  const setOverride = (variantId: string, state: OverrideState) => {
+    setOverrides((prev) => {
+      const next = new Map(prev)
+      next.set(variantId, state)
+      return next
+    })
+  }
+
   const handle = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const data = new FormData(e.currentTarget)
+    // Sérialiser les overrides en JSON (en omettant "inherit") pour `actions.ts`.
+    // Pour l'instant on ne touche pas à `acceptedDocTypes` par variante (futur si besoin).
+    const serialized = Array.from(overrides.entries())
+      .filter(([, state]) => state !== "inherit")
+      .map(([variantId, state]) => ({
+        variantId,
+        required: state === "required",
+      }))
+    data.set("variantOverrides", JSON.stringify(serialized))
     setError(null)
     startTransition(async () => {
       const res = await onSubmit(data)
@@ -485,6 +560,147 @@ function RequirementDialog({
               ))}
             </select>
           </div>
+
+          {/* Règles par variante — uniquement si le service a plusieurs variantes */}
+          {variants.length > 1 && (
+            <fieldset
+              style={{
+                border: "1px solid var(--ink-200)",
+                borderRadius: 6,
+                padding: "12px 14px",
+                margin: 0,
+              }}
+            >
+              <legend
+                style={{
+                  ...fieldLabel,
+                  padding: "0 6px",
+                  marginBottom: 0,
+                }}
+              >
+                Règles par variante
+              </legend>
+              <p
+                style={{
+                  fontSize: 12,
+                  color: "var(--ink-600)",
+                  margin: "4px 0 12px",
+                }}
+              >
+                Surcharge la règle générale ci-dessus pour certaines variantes.
+                Par défaut, chaque variante hérite de la règle générale.
+              </p>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 10,
+                }}
+              >
+                {variants.map((v) => {
+                  const state = overrides.get(v.id) ?? "inherit"
+                  return (
+                    <fieldset
+                      key={v.id}
+                      style={{
+                        border: "none",
+                        padding: 0,
+                        margin: 0,
+                        display: "grid",
+                        gridTemplateColumns: "minmax(160px, 1fr) auto",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
+                      <legend
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 500,
+                          padding: 0,
+                          float: "left",
+                        }}
+                      >
+                        {v.label}
+                        {v.isDefault && (
+                          <span
+                            style={{
+                              marginLeft: 6,
+                              fontSize: 11,
+                              color: "var(--ink-500)",
+                              fontWeight: 400,
+                            }}
+                          >
+                            (défaut)
+                          </span>
+                        )}
+                      </legend>
+                      <div
+                        role="radiogroup"
+                        aria-label={`Règle pour la variante ${v.label}`}
+                        style={{ display: "inline-flex", gap: 4 }}
+                      >
+                        {(
+                          [
+                            { val: "inherit", label: "Hériter" },
+                            { val: "required", label: "Obligatoire" },
+                            { val: "optional", label: "Facultative" },
+                          ] as const
+                        ).map((opt) => {
+                          const checked = state === opt.val
+                          return (
+                            <label
+                              key={opt.val}
+                              style={{
+                                fontSize: 12,
+                                padding: "4px 8px",
+                                border: `1px solid ${
+                                  checked
+                                    ? "var(--primary-500)"
+                                    : "var(--ink-200)"
+                                }`,
+                                borderRadius: 4,
+                                background: checked
+                                  ? "var(--primary-50)"
+                                  : "white",
+                                color: checked
+                                  ? "var(--primary-700)"
+                                  : "var(--ink-700)",
+                                cursor: "pointer",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 4,
+                                fontWeight: checked ? 600 : 400,
+                              }}
+                            >
+                              <input
+                                type="radio"
+                                name={`override-${v.id}`}
+                                value={opt.val}
+                                checked={checked}
+                                onChange={() => setOverride(v.id, opt.val)}
+                                style={{
+                                  position: "absolute",
+                                  width: 1,
+                                  height: 1,
+                                  margin: -1,
+                                  padding: 0,
+                                  overflow: "hidden",
+                                  clip: "rect(0,0,0,0)",
+                                  border: 0,
+                                }}
+                              />
+                              {opt.label}
+                            </label>
+                          )
+                        })}
+                      </div>
+                    </fieldset>
+                  )
+                })}
+              </div>
+            </fieldset>
+          )}
+
           {error && (
             <div
               role="alert"
