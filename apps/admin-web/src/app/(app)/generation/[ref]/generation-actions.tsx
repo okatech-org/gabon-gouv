@@ -117,21 +117,25 @@ export function GenerationActions({
           </Button>
         )}
       </div>
-      {feedback && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: 24,
-            right: 24,
-            zIndex: 50,
-            maxWidth: 380,
-          }}
-        >
+      {/* Région live persistante (RGAA 7.5). */}
+      <div
+        role={feedback?.ok === false ? "alert" : "status"}
+        aria-live={feedback?.ok === false ? "assertive" : "polite"}
+        aria-atomic="true"
+        style={{
+          position: "fixed",
+          bottom: 24,
+          right: 24,
+          zIndex: 50,
+          maxWidth: 380,
+        }}
+      >
+        {feedback && (
           <Alert tone={feedback.ok ? "success" : "danger"}>
             {feedback.message}
           </Alert>
-        </div>
-      )}
+        )}
+      </div>
     </>
   )
 }

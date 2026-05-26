@@ -52,3 +52,7 @@ export type { SparklineProps } from "./components/sparkline"
 export { Donut } from "./components/donut"
 export type { DonutProps } from "./components/donut"
 export type { Tone, Size, SidebarItem, SidebarItemLink, SidebarItemSection } from "./types"
+
+// Hooks
+export { useModalA11y } from "./hooks/use-modal-a11y"
+export type { UseModalA11yOptions } from "./hooks/use-modal-a11y"

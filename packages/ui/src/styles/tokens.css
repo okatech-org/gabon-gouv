@@ -220,3 +220,25 @@ select {
   white-space: nowrap !important;
   border: 0 !important;
 }
+
+/* Lien d'évitement (skip link) — RGAA 12.7 / WCAG 2.4.1. Caché jusqu'au focus.
+   À placer en première position du <body> et pointer vers `#main`. */
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 0;
+  z-index: 1000;
+  padding: 8px 16px;
+  background: var(--primary-700);
+  color: white;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 14px;
+  border-bottom-right-radius: 6px;
+}
+.skip-link:focus,
+.skip-link:focus-visible {
+  top: 0;
+  outline: 3px solid var(--yellow-500, #fcd116);
+  outline-offset: 2px;
+}

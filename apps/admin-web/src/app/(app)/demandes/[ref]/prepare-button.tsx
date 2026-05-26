@@ -9,9 +9,9 @@
  * via un Dialog (fallback legacy).
  */
 
-import { useEffect, useRef, useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { Alert, Button } from "@workspace/ui"
+import { Alert, Button, useModalA11y } from "@workspace/ui"
 import { prepareDocumentAction } from "./actions"
 
 interface Agent {
@@ -78,19 +78,26 @@ export function PrepareDocumentButton({
       >
         {pending ? "Préparation…" : "Préparer l'acte"}
       </Button>
-      {feedback && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: 24,
-            right: 24,
-            zIndex: 50,
-            maxWidth: 360,
-          }}
-        >
-          <Alert tone={feedback.ok ? "success" : "danger"}>{feedback.message}</Alert>
-        </div>
-      )}
+      {/* Région live persistante (RGAA 7.5) — préexiste dans le DOM,
+          contenu mis à jour pour que les AT annoncent les messages. */}
+      <div
+        role={feedback?.ok === false ? "alert" : "status"}
+        aria-live={feedback?.ok === false ? "assertive" : "polite"}
+        aria-atomic="true"
+        style={{
+          position: "fixed",
+          bottom: 24,
+          right: 24,
+          zIndex: 50,
+          maxWidth: 360,
+        }}
+      >
+        {feedback && (
+          <Alert tone={feedback.ok ? "success" : "danger"}>
+            {feedback.message}
+          </Alert>
+        )}
+      </div>
       {pickingAssignees && (
         <PickAssigneesDialog
           candidatesByRole={candidatesByRole}
@@ -118,16 +125,14 @@ function PickAssigneesDialog({
   const [officierId, setOfficierId] = useState(
     candidatesByRole.officier_signataire[0]?.id ?? "",
   )
+  const dialogRef = useRef<HTMLDivElement>(null)
   const firstSelectRef = useRef<HTMLSelectElement>(null)
 
-  useEffect(() => {
-    firstSelectRef.current?.focus()
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose()
-    }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [onClose])
+  useModalA11y({
+    containerRef: dialogRef,
+    initialFocusRef: firstSelectRef,
+    onClose,
+  })
 
   const handle = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -137,6 +142,7 @@ function PickAssigneesDialog({
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="prepare-title"

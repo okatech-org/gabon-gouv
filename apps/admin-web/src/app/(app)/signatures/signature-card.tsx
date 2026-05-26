@@ -15,7 +15,7 @@
 import { useEffect, useRef, useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Badge, Button, Card, Icon } from "@workspace/ui"
+import { Badge, Button, Card, Icon, useModalA11y } from "@workspace/ui"
 import { approveAction, refuseAction } from "./actions"
 
 interface Props {
@@ -181,9 +181,9 @@ export function SignatureCard(props: Props) {
                   margin: "0 0 12px",
                 }}
               >
-                Vous êtes assigné{props.agentName.endsWith("e") ? "e" : ""} à
-                l&apos;étape <strong>{props.stepOrder + 1}</strong> du circuit.
-                Votre décision avancera le dossier vers la prochaine étape, ou
+                Vous êtes désigné·e pour l&apos;étape{" "}
+                <strong>{props.stepOrder + 1}</strong> du circuit. Votre
+                décision avancera le dossier vers la prochaine étape, ou
                 déclenchera l&apos;émission finale s&apos;il s&apos;agit du
                 dernier visa.
               </p>
@@ -245,22 +245,29 @@ export function SignatureCard(props: Props) {
             </>
           )}
 
-          {feedback && (
-            <div
-              role={feedback.ok ? "status" : "alert"}
-              style={{
-                marginTop: 10,
-                padding: 8,
-                fontSize: 12,
-                background: feedback.ok ? "var(--success-50)" : "var(--danger-50)",
-                color: feedback.ok ? "var(--success-700)" : "var(--danger-700)",
-                border: `1px solid ${feedback.ok ? "var(--success-500)" : "var(--danger-500)"}`,
-                borderRadius: 6,
-              }}
-            >
-              {feedback.message}
-            </div>
-          )}
+          {/* Région live persistante (RGAA 7.5) — toujours dans le DOM,
+              contenu mis à jour ; les AT annoncent les changements. */}
+          <div
+            role={feedback?.ok === false ? "alert" : "status"}
+            aria-live={feedback?.ok === false ? "assertive" : "polite"}
+            aria-atomic="true"
+            style={{ marginTop: feedback ? 10 : 0 }}
+          >
+            {feedback && (
+              <div
+                style={{
+                  padding: 8,
+                  fontSize: 12,
+                  background: feedback.ok ? "var(--success-50)" : "var(--danger-50)",
+                  color: feedback.ok ? "var(--success-700)" : "var(--danger-700)",
+                  border: `1px solid ${feedback.ok ? "var(--success-500)" : "var(--danger-500)"}`,
+                  borderRadius: 6,
+                }}
+              >
+                {feedback.message}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Footer actions (pending only) */}
@@ -316,16 +323,14 @@ function RefuseDialog({
   const [comment, setComment] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
+  const dialogRef = useRef<HTMLDivElement>(null)
   const firstRef = useRef<HTMLTextAreaElement>(null)
 
-  useEffect(() => {
-    firstRef.current?.focus()
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose()
-    }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [onClose])
+  useModalA11y({
+    containerRef: dialogRef,
+    initialFocusRef: firstRef,
+    onClose,
+  })
 
   const handle = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -343,6 +348,7 @@ function RefuseDialog({
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="refuse-title-sig"

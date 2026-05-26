@@ -18,7 +18,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { Badge, Button, Icon } from "@workspace/ui"
+import { Badge, Button, Icon, useModalA11y } from "@workspace/ui"
 import {
   getPieceViewUrlAction,
   rejectPieceAction,
@@ -240,6 +240,7 @@ function PieceViewerDialog({
   piece: Piece
   onClose: () => void
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null)
   const closeBtnRef = useRef<HTMLButtonElement>(null)
   const [data, setData] = useState<
     | { state: "loading" }
@@ -247,12 +248,13 @@ function PieceViewerDialog({
     | { state: "error"; message: string }
   >({ state: "loading" })
 
+  useModalA11y({
+    containerRef: dialogRef,
+    initialFocusRef: closeBtnRef,
+    onClose,
+  })
+
   useEffect(() => {
-    closeBtnRef.current?.focus()
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose()
-    }
-    window.addEventListener("keydown", onKey)
     let cancelled = false
     getPieceViewUrlAction(piece.id).then((res) => {
       if (cancelled) return
@@ -269,15 +271,15 @@ function PieceViewerDialog({
     })
     return () => {
       cancelled = true
-      window.removeEventListener("keydown", onKey)
     }
-  }, [onClose, piece.id])
+  }, [piece.id])
 
   const isImage = piece.mimeType?.startsWith("image/")
   const isPdf = piece.mimeType === "application/pdf"
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="piece-viewer-title"
@@ -421,16 +423,14 @@ function RejectPieceDialog({
   const [reason, setReason] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
+  const dialogRef = useRef<HTMLDivElement>(null)
   const firstInputRef = useRef<HTMLTextAreaElement>(null)
 
-  useEffect(() => {
-    firstInputRef.current?.focus()
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose()
-    }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [onClose])
+  useModalA11y({
+    containerRef: dialogRef,
+    initialFocusRef: firstInputRef,
+    onClose,
+  })
 
   const handle = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -448,6 +448,7 @@ function RejectPieceDialog({
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="reject-piece-title"
@@ -544,8 +545,9 @@ function RejectPieceDialog({
 }
 
 const iconBtn = {
-  width: 28,
-  height: 28,
+  // Cible 32×32 — confortable tactile et > WCAG 2.5.5 AA (24px min).
+  width: 32,
+  height: 32,
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",

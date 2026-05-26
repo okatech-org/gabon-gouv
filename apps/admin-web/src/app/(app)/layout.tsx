@@ -44,6 +44,10 @@ export default async function AppShellLayout({ children }: { children: ReactNode
         overflow: "hidden",
       }}
     >
+      {/* Skip link RGAA 12.7 — premier focusable de la page. */}
+      <a href="#main" className="skip-link">
+        Aller au contenu principal
+      </a>
       <AppHeader
         org={session.agent.organism?.shortName ?? session.agent.organism?.name}
         user={session.agent.name}
@@ -52,6 +56,8 @@ export default async function AppShellLayout({ children }: { children: ReactNode
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
         <Sidebar items={nav} />
         <main
+          id="main"
+          tabIndex={-1}
           style={{
             flex: 1,
             minWidth: 0,

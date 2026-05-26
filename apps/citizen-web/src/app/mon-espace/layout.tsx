@@ -61,10 +61,16 @@ export default async function CitizenSpaceLayout({
         overflow: "hidden",
       }}
     >
+      {/* Skip link RGAA 12.7. */}
+      <a href="#main" className="skip-link">
+        Aller au contenu principal
+      </a>
       <AppHeader user={displayName} role="Citoyenne" />
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
         <Sidebar items={navItems} />
         <main
+          id="main"
+          tabIndex={-1}
           style={{
             flex: 1,
             minWidth: 0,

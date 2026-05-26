@@ -13,9 +13,9 @@
  *   - dialog motif avec focus initial + Escape
  */
 
-import { useEffect, useRef, useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { Badge, Button, Icon } from "@workspace/ui"
+import { Badge, Button, Icon, useModalA11y } from "@workspace/ui"
 import {
   approveSignatureStepAction,
   refuseSignatureStepAction,
@@ -269,16 +269,14 @@ function RefuseDialog({
   const [comment, setComment] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
+  const dialogRef = useRef<HTMLDivElement>(null)
   const firstRef = useRef<HTMLTextAreaElement>(null)
 
-  useEffect(() => {
-    firstRef.current?.focus()
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose()
-    }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [onClose])
+  useModalA11y({
+    containerRef: dialogRef,
+    initialFocusRef: firstRef,
+    onClose,
+  })
 
   const handle = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -296,6 +294,7 @@ function RefuseDialog({
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="refuse-title"
