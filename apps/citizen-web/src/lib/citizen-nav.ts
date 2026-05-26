@@ -4,12 +4,14 @@ export interface CitizenNavCounts {
   requestsInProgress?: number
   documentsReceived?: number
   unreadMessages?: number
+  unreadCorrespondences?: number
 }
 
 export const buildCitizenNav = ({
   requestsInProgress,
   documentsReceived,
   unreadMessages,
+  unreadCorrespondences,
 }: CitizenNavCounts = {}): SidebarItem[] => [
   { id: "home", label: "Accueil", icon: "home", href: "/mon-espace" },
   {
@@ -33,6 +35,13 @@ export const buildCitizenNav = ({
     icon: "mail",
     count: unreadMessages,
     href: "/mon-espace/messages",
+  },
+  {
+    id: "courriers",
+    label: "Courriers officiels",
+    icon: "fileText",
+    count: unreadCorrespondences,
+    href: "/mon-espace/courriers",
   },
   { section: "Compte" },
   { id: "profil", label: "Mes informations", icon: "user", href: "/mon-espace/profil" },
