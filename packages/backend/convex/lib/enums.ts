@@ -651,6 +651,32 @@ export const NOTIFICATION_SEVERITIES = [
 export type NotificationSeverity = (typeof NOTIFICATION_SEVERITIES)[number]
 export const notificationSeverityValidator = literals(...NOTIFICATION_SEVERITIES)
 
+/**
+ * Canaux de distribution gérés par `NotificationProvider` (Phase Trous A).
+ * `in_app` est toujours actif (insert dans `notifications`). Les canaux
+ * externes (`email`, `sms`) passent par `notificationOutbox` qui sera
+ * vidé par des actions Node (skeleton v1, dispatch effectif Phase 2).
+ */
+export const NOTIFICATION_CHANNELS = [
+  "in_app",
+  "email",
+  "sms",
+] as const
+export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number]
+export const notificationChannelValidator = literals(...NOTIFICATION_CHANNELS)
+
+export const NOTIFICATION_OUTBOX_STATUSES = [
+  "pending",
+  "sent",
+  "failed",
+  "skipped",
+] as const
+export type NotificationOutboxStatus =
+  (typeof NOTIFICATION_OUTBOX_STATUSES)[number]
+export const notificationOutboxStatusValidator = literals(
+  ...NOTIFICATION_OUTBOX_STATUSES,
+)
+
 /* ============================================================
    Infrastructure et supervision plateforme
    ============================================================ */

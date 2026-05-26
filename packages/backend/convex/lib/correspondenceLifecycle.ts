@@ -20,6 +20,7 @@ import type {
   ConfidentialityLevel,
   CorrespondenceKind,
 } from "./enums"
+import { notify } from "./notificationProvider"
 
 /* ============================================================
    Types
@@ -261,7 +262,7 @@ export async function notifyRecipientsOnSend(
       ]
       for (const agent of agents) {
         if (!eligibleRoles.includes(agent.role)) continue
-        await ctx.db.insert("notifications", {
+        await notify(ctx, {
           recipientKind: "agent",
           recipientId: String(agent._id),
           kind: "correspondence_received",
@@ -273,14 +274,13 @@ export async function notifyRecipientsOnSend(
             recipient.role !== "to" ? ` (en ${recipient.role.toUpperCase()})` : ""
           }`,
           linkTo: `/correspondance/${correspondence.ref}`,
-          createdAt: now,
         })
       }
     } else if (
       recipient.recipientKind === "citizen" &&
       recipient.recipientCitizenId
     ) {
-      await ctx.db.insert("notifications", {
+      await notify(ctx, {
         recipientKind: "citizen",
         recipientId: String(recipient.recipientCitizenId),
         kind: "correspondence_received",
@@ -288,7 +288,6 @@ export async function notifyRecipientsOnSend(
         title: `Courrier de l'administration : ${correspondence.subject}`,
         body: `Réf. ${correspondence.ref}. Connectez-vous pour le consulter.`,
         linkTo: `/mon-espace/courriers/${correspondence.ref}`,
-        createdAt: now,
       })
     }
     // external / platform : pas de notif v1

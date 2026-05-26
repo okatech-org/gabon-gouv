@@ -36,6 +36,7 @@ import {
 } from "../lib/correspondenceLifecycle"
 import { signMessage } from "../lib/smime"
 import { createCircuit } from "../lib/signatureCircuit"
+import { notify } from "../lib/notificationProvider"
 
 /* ============================================================
    Brouillon — création & édition
@@ -410,7 +411,7 @@ export const submitForSignature = mutation({
     })
 
     // Notif au premier signataire au-delà de l'instructeur
-    await ctx.db.insert("notifications", {
+    await notify(ctx, {
       recipientKind: "agent",
       recipientId: String(chefId),
       kind: "signature_requested",
@@ -418,7 +419,6 @@ export const submitForSignature = mutation({
       title: "Visa demandé sur correspondance",
       body: `${corres.ref} attend votre approbation.`,
       linkTo: `/signatures`,
-      createdAt: Date.now(),
     })
 
     return { circuitId }
@@ -477,7 +477,7 @@ export const acknowledge = mutation({
       const sender =
         corres.createdByAgentId && (await ctx.db.get(corres.createdByAgentId))
       if (sender) {
-        await ctx.db.insert("notifications", {
+        await notify(ctx, {
           recipientKind: "agent",
           recipientId: String(sender._id),
           kind: "correspondence_acknowledged",
@@ -485,7 +485,6 @@ export const acknowledge = mutation({
           title: "Accusé de réception reçu",
           body: `${corres.ref} a été reçu par ${recipient.recipientNameSnapshot}.`,
           linkTo: `/correspondance/${corres.ref}`,
-          createdAt: now,
         })
       }
     }
@@ -544,7 +543,7 @@ export const reply = mutation({
 
     // Notif expéditeur
     if (corres.createdByAgentId && corres.createdByAgentId !== me._id) {
-      await ctx.db.insert("notifications", {
+      await notify(ctx, {
         recipientKind: "agent",
         recipientId: String(corres.createdByAgentId),
         kind: "correspondence_replied",
@@ -552,7 +551,6 @@ export const reply = mutation({
         title: "Réponse reçue",
         body: `${corres.ref} — ${me.name} a répondu.`,
         linkTo: `/correspondance/${corres.ref}`,
-        createdAt: now,
       })
     }
   },
@@ -618,7 +616,7 @@ export const recall = mutation({
             ? r.recipientCitizenId
             : null
       if (!recipientId) continue
-      await ctx.db.insert("notifications", {
+      await notify(ctx, {
         recipientKind: r.recipientKind === "citizen" ? "citizen" : "agent",
         recipientId: String(recipientId),
         kind: "correspondence_recalled",
@@ -626,7 +624,6 @@ export const recall = mutation({
         title: "Courrier rappelé",
         body: `${corres.ref} a été rappelé par l'expéditeur.`,
         linkTo: `/correspondance/${corres.ref}`,
-        createdAt: now,
       })
     }
     return { already: false as const }

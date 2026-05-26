@@ -8,6 +8,7 @@ import {
   savedItemKindValidator,
   sexValidator,
 } from "../lib/enums"
+import { notificationPreferencesValidator } from "./notifications"
 
 /**
  * Citoyens, relations familiales déclarées, items sauvegardés, recommandations.
@@ -35,6 +36,8 @@ export const citizensTables = {
     identityVerified: v.boolean(),
     identityVerifiedAt: v.optional(v.number()),
     accountCreatedAt: v.optional(v.number()),
+    // Phase Trous A — préférences notif (défaut: in_app uniquement)
+    notificationPreferences: v.optional(notificationPreferencesValidator),
     createdAt: v.number(),
   })
     .index("by_nip", ["nip"])

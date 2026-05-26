@@ -11,6 +11,7 @@ import {
   organismStatusValidator,
   provinceCodeValidator,
 } from "../lib/enums"
+import { notificationPreferencesValidator } from "./notifications"
 
 /**
  * Organismes, agents, processus d'onboarding, conventions, provinces.
@@ -85,6 +86,11 @@ export const organismsTables = {
     function: v.optional(v.string()), // « DG », « Chef de service juridique »…
     authMethod: v.optional(authMethodValidator),
     active: v.optional(v.boolean()),
+    // Phase Trous A — préférences notif (défaut: in_app uniquement)
+    notificationPreferences: v.optional(notificationPreferencesValidator),
+    // Phase Trous B — audit lifecycle agent
+    disabledAt: v.optional(v.number()),
+    disabledByAgentId: v.optional(v.id("agents")),
   })
     .index("by_nip", ["nip"])
     .index("by_organism", ["organismId"])

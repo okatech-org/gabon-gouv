@@ -19,6 +19,7 @@ import {
   confidentialityLevelValidator,
   verificationStatusValidator,
 } from "../lib/enums"
+import { notify } from "../lib/notificationProvider"
 
 /* ---------- Assigner une demande à un agent ---------- */
 export const assignRequest = mutation({
@@ -53,7 +54,7 @@ export const assignRequest = mutation({
     })
     // Notif à l'agent cible — sauf si auto-assignation (il sait déjà).
     if (targetAgentId !== me._id) {
-      await ctx.db.insert("notifications", {
+      await notify(ctx, {
         recipientKind: "agent",
         recipientId: String(targetAgentId),
         kind: "assignment",
@@ -62,7 +63,6 @@ export const assignRequest = mutation({
         body: `Vous êtes désigné pour traiter la demande ${request.ref}.`,
         linkTo: `/demandes/${request.ref}`,
         linkedRequestId: request._id,
-        createdAt: now,
       })
     }
   },
@@ -94,7 +94,7 @@ export const requestPiece = mutation({
       occurredAt: now,
     })
     // Notif citoyen — il doit uploader la pièce.
-    await ctx.db.insert("notifications", {
+    await notify(ctx, {
       recipientKind: "citizen",
       recipientId: String(request.citizenId),
       kind: "piece_requested",
@@ -103,7 +103,6 @@ export const requestPiece = mutation({
       body: `${label} — réf. ${request.ref}. Connectez-vous pour téléverser le document.`,
       linkTo: `/mon-espace/demarches/${request.ref}`,
       linkedRequestId: request._id,
-      createdAt: now,
     })
   },
 })
@@ -569,7 +568,7 @@ export const rejectRequest = mutation({
       occurredAt: now,
     })
     // Notif citoyen — il doit savoir que sa demande est rejetée + le motif.
-    await ctx.db.insert("notifications", {
+    await notify(ctx, {
       recipientKind: "citizen",
       recipientId: String(request.citizenId),
       kind: "request_status_change",
@@ -578,7 +577,6 @@ export const rejectRequest = mutation({
       body: `Réf. ${request.ref} — motif : ${reason.slice(0, 140)}${reason.length > 140 ? "…" : ""}`,
       linkTo: `/mon-espace/demarches/${request.ref}`,
       linkedRequestId: request._id,
-      createdAt: now,
     })
   },
 })
@@ -738,7 +736,7 @@ export const prepareDocument = mutation({
 
     // Notification au premier assignee (autre que l'instructeur lui-même)
     if (steps.length > 1 && steps[1]) {
-      await ctx.db.insert("notifications", {
+      await notify(ctx, {
         recipientKind: "agent",
         recipientId: String(steps[1].assigneeAgentId),
         kind: "signature_requested",
@@ -747,7 +745,6 @@ export const prepareDocument = mutation({
         body: `${doc?.actNumber ?? ""} attend votre approbation.`,
         linkTo: `/signatures`,
         linkedRequestId: request._id,
-        createdAt: Date.now(),
       })
     }
 
@@ -886,7 +883,7 @@ export const refuseSignatureStep = mutation({
 
     // Notification au préparateur (instructeur initial) — sauf s'il est moi
     if (doc.issuedByAgentId !== me._id) {
-      await ctx.db.insert("notifications", {
+      await notify(ctx, {
         recipientKind: "agent",
         recipientId: String(doc.issuedByAgentId),
         kind: "request_status_change",
@@ -895,7 +892,6 @@ export const refuseSignatureStep = mutation({
         body: `${doc.actNumber} a été refusé : ${comment.slice(0, 120)}${comment.length > 120 ? "…" : ""}`,
         linkTo: `/demandes/${request.ref}`,
         linkedRequestId: request._id,
-        createdAt: Date.now(),
       })
     }
   },
@@ -958,7 +954,7 @@ export const revokeDocument = mutation({
 
     // Notification citoyen — il doit savoir que son acte n'est plus valide
     // pour pouvoir refaire une demande si besoin.
-    await ctx.db.insert("notifications", {
+    await notify(ctx, {
       recipientKind: "citizen",
       recipientId: String(doc.citizenId),
       kind: "request_status_change",
@@ -967,7 +963,6 @@ export const revokeDocument = mutation({
       body: `${doc.actNumber} : ${trimmed.slice(0, 140)}${trimmed.length > 140 ? "…" : ""}. Vous pouvez déposer une nouvelle demande si besoin.`,
       linkTo: `/mon-espace/demandes/${(await ctx.db.get(doc.requestId))?.ref ?? ""}`,
       linkedRequestId: doc.requestId,
-      createdAt: now,
     })
 
     return { already: false as const, revokedAt: now }

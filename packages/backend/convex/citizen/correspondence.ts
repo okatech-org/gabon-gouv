@@ -23,6 +23,7 @@ import {
   correspondenceKindValidator,
   type CorrespondenceKind,
 } from "../lib/enums"
+import { notify } from "../lib/notificationProvider"
 import {
   generateCorrespondenceRef,
   loadKindRule,
@@ -266,7 +267,7 @@ export const citizenReply = mutation({
           agent.role === "platform_admin"
         )
           continue
-        await ctx.db.insert("notifications", {
+        await notify(ctx, {
           recipientKind: "agent",
           recipientId: String(agent._id),
           kind: "correspondence_replied",
@@ -274,7 +275,6 @@ export const citizenReply = mutation({
           title: "Réponse citoyenne reçue",
           body: `${corres.ref} — ${citizen.name} a répondu.`,
           linkTo: `/correspondance/${corres.ref}`,
-          createdAt: now,
         })
       }
     }
@@ -381,7 +381,7 @@ async function performCitizenSend(
         agent.role === "platform_admin"
       )
         continue
-      await ctx.db.insert("notifications", {
+      await notify(ctx, {
         recipientKind: "agent",
         recipientId: String(agent._id),
         kind: "correspondence_received",
@@ -389,7 +389,6 @@ async function performCitizenSend(
         title: `Courrier d'un citoyen : ${corres.subject}`,
         body: `${corres.ref} — ${citizen.name}`,
         linkTo: `/correspondance/${corres.ref}`,
-        createdAt: now,
       })
     }
   }

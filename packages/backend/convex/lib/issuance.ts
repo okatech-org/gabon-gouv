@@ -32,6 +32,7 @@
 import type { Id, Doc } from "../_generated/dataModel"
 import type { MutationCtx } from "../_generated/server"
 import { internal } from "../_generated/api"
+import { notify } from "./notificationProvider"
 
 export interface FinalizeArgs {
   documentId: Id<"documents">
@@ -129,7 +130,7 @@ export async function finalizeIssuance(
   })
 
   // ---------- 6. Notification citoyen ----------
-  await ctx.db.insert("notifications", {
+  await notify(ctx, {
     recipientKind: "citizen",
     recipientId: String(doc.citizenId),
     kind: "document_ready",
@@ -140,7 +141,6 @@ export async function finalizeIssuance(
       : `Votre demande ${request.ref} est prête. Téléchargez l'acte depuis votre espace.`,
     linkTo: `/mon-espace/demandes/${request.ref}`,
     linkedRequestId: request._id,
-    createdAt: now,
   })
 
   return {
