@@ -24,6 +24,7 @@
 import { v } from "convex/values"
 import type { Doc, Id } from "../_generated/dataModel"
 import type { MutationCtx, QueryCtx } from "../_generated/server"
+import { internal } from "../_generated/api"
 
 /* ============================================================
    Validators publics (pour les mutations qui prennent ces shapes)
@@ -247,17 +248,15 @@ export class DigitaliumSaeProvider implements SaeProvider {
       externalStatusUpdatedAt: Date.now(),
     })
 
-    // TODO Bloc 6 Phase 4 : appeler dispatchToDigitalium via scheduler
-    // (ctx.scheduler.runAfter pour ne pas bloquer la transaction)
-    // await ctx.scheduler.runAfter(0, internal.sae.dispatch.toDigitalium, {
-    //   archiveId,
-    //   connectorId: this.config.connectorId,
-    // })
-    void this.config
-    console.warn(
-      `[SAE] DigitaliumSaeProvider.verse : push vers SAE national non implémenté v1. ` +
-        `Archive ${args.cote} créée localement avec externalStatus=pending_dispatch.`,
+    // Phase Trous D — dispatch effectif vers Digitalium SAE via action Node.
+    // Non bloquant : on schedule pour ne pas tenir la transaction ouverte
+    // pendant le fetch HTTP. Le scheduler garantit le run après la commit.
+    await ctx.scheduler.runAfter(
+      0,
+      internal.sae.dispatch.toDigitalium,
+      { archiveId },
     )
+    void this.config
 
     return {
       archiveId,

@@ -39,6 +39,9 @@ export const archivesTables = {
     externalSaeKind: v.optional(v.string()), // "digitalium" | "vitam" | …
     externalStatus: v.optional(v.string()),
     externalStatusUpdatedAt: v.optional(v.number()),
+    // Phase Trous D — dispatch lifecycle (retry borné)
+    externalDispatchAttempts: v.optional(v.number()),
+    externalLastError: v.optional(v.string()),
   })
     .index("by_cote", ["cote"])
     .index("by_organism_status", ["producerOrganismId", "status"])

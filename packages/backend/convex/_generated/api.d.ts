@@ -27,6 +27,7 @@ import type * as admin_signatures from "../admin/signatures.js";
 import type * as admin_team from "../admin/team.js";
 import type * as pdf_action from "../pdf/action.js";
 import type * as pdf_render from "../pdf/render.js";
+import type * as sae_dispatch from "../sae/dispatch.js";
 import type * as aggregates from "../aggregates.js";
 import type * as auth from "../auth.js";
 import type * as citizen_auth from "../citizen/auth.js";
@@ -104,6 +105,7 @@ declare const fullApi: ApiFromModules<{
   "admin/team": typeof admin_team;
   "pdf/action": typeof pdf_action;
   "pdf/render": typeof pdf_render;
+  "sae/dispatch": typeof sae_dispatch;
   aggregates: typeof aggregates;
   auth: typeof auth;
   "citizen/auth": typeof citizen_auth;
