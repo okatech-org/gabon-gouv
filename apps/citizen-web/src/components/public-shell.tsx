@@ -36,6 +36,10 @@ export const PublicShell = ({ active, children }: PublicShellProps) => (
       flexDirection: "column",
     }}
   >
+    {/* Skip link RGAA 12.7 — premier focusable. */}
+    <a href="#main" className="skip-link">
+      Aller au contenu principal
+    </a>
     <RepublicBar />
     <header
       style={{
@@ -75,7 +79,11 @@ export const PublicShell = ({ active, children }: PublicShellProps) => (
       </Link>
     </header>
 
-    <main style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+    <main
+      id="main"
+      tabIndex={-1}
+      style={{ flex: 1, display: "flex", flexDirection: "column" }}
+    >
       {children}
     </main>
 

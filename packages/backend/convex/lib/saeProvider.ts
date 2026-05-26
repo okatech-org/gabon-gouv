@@ -251,11 +251,13 @@ export class DigitaliumSaeProvider implements SaeProvider {
     // Phase Trous D — dispatch effectif vers Digitalium SAE via action Node.
     // Non bloquant : on schedule pour ne pas tenir la transaction ouverte
     // pendant le fetch HTTP. Le scheduler garantit le run après la commit.
-    await ctx.scheduler.runAfter(
-      0,
-      internal.sae.dispatch.toDigitalium,
-      { archiveId },
-    )
+    // Cast pour casser la dépendance circulaire de types (toDigitalium se
+    // référence lui-même via internal pour son retry borné).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const dispatchRef = (internal.sae.dispatch as any).toDigitalium as Parameters<
+      typeof ctx.scheduler.runAfter
+    >[1]
+    await ctx.scheduler.runAfter(0, dispatchRef, { archiveId })
     void this.config
 
     return {

@@ -94,9 +94,7 @@ export default async function ArchivesPage({ searchParams }: PageProps) {
             : "Archives versées au Système d'Archivage Électronique national."
         }
       />
-      <main
-        id="main"
-        tabIndex={-1}
+      <div
         style={{
           padding: "20px 32px",
           display: "flex",
@@ -324,7 +322,7 @@ export default async function ArchivesPage({ searchParams }: PageProps) {
             />
           </Card>
         )}
-      </main>
+      </div>
     </>
   )
 }

@@ -34,6 +34,10 @@ export default async function PlatformShellLayout({
         overflow: "hidden",
       }}
     >
+      {/* Skip link RGAA 12.7 — premier focusable de la page. */}
+      <a href="#main" className="skip-link">
+        Aller au contenu principal
+      </a>
       <AppHeader
         org={user.organism?.name ?? "Gabon Connect — Console plateforme"}
         user={user.name}
@@ -42,6 +46,8 @@ export default async function PlatformShellLayout({
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
         <Sidebar items={nav} />
         <main
+          id="main"
+          tabIndex={-1}
           style={{
             flex: 1,
             minWidth: 0,

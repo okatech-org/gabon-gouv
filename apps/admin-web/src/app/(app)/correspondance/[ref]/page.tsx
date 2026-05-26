@@ -50,13 +50,9 @@ export default async function CorrespondanceRefPage({
           </Link>
         }
       />
-      <main
-        id="main"
-        tabIndex={-1}
-        style={{ flex: 1, minHeight: 0, display: "flex" }}
-      >
+      <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
         <ThreadView thread={thread} correspondenceId="" />
-      </main>
+      </div>
     </>
   )
 }

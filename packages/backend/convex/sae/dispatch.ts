@@ -28,6 +28,8 @@
 
 import { createHmac } from "node:crypto"
 import { v } from "convex/values"
+import type { Id } from "../_generated/dataModel"
+import type { ActionCtx } from "../_generated/server"
 import { internal } from "../_generated/api"
 import {
   action,
@@ -135,10 +137,42 @@ export const markSkipped = internalMutation({
    Action principale — dispatch HMAC réel
    ============================================================ */
 
+interface DispatchContextResult {
+  archive: {
+    _id: Id<"archives">
+    cote: string
+    description: string
+    producerOrganismId: string
+    sha256: string
+    qualifiedTimestamp?: string
+    dua: string
+    duaExpiresAt?: number
+    finalSort: string
+    sizeBytes?: number
+    externalStatus?: string
+    externalDispatchAttempts: number
+  }
+  organism: {
+    saeConfig?: {
+      provider: "local" | "digitalium"
+      digitaliumConnectorId?: string
+      digitaliumBaseUrl?: string
+    }
+  } | null
+}
+
+interface DispatchResult {
+  skipped?: boolean
+  reason?: string
+  dispatched?: boolean
+  retried?: boolean
+  finalFailure?: boolean
+}
+
 export const toDigitalium = action({
   args: { archiveId: v.id("archives") },
-  handler: async (ctx, { archiveId }) => {
-    const ctxData = await ctx.runQuery(
+  handler: async (ctx, { archiveId }): Promise<DispatchResult> => {
+    const ctxData: DispatchContextResult | null = await ctx.runQuery(
       internal.sae.dispatch.loadDispatchContext,
       { archiveId },
     )
@@ -191,7 +225,7 @@ export const toDigitalium = action({
     const signature = createHmac("sha256", secret).update(body).digest("hex")
 
     const url = `${baseUrl.replace(/\/$/, "")}/api/connectors/${connectorId}/events`
-    const attempts = ctxData.archive.externalDispatchAttempts ?? 0
+    const attempts: number = ctxData.archive.externalDispatchAttempts ?? 0
 
     try {
       const res = await fetch(url, {
@@ -235,8 +269,8 @@ export const toDigitalium = action({
 })
 
 async function handleFailure(
-  ctx: Parameters<typeof toDigitalium.handler>[0],
-  archiveId: Parameters<typeof toDigitalium.handler>[1]["archiveId"],
+  ctx: ActionCtx,
+  archiveId: Id<"archives">,
   currentAttempts: number,
   error: string,
 ): Promise<{ retried: boolean; finalFailure?: boolean }> {
@@ -252,11 +286,13 @@ async function handleFailure(
 
   if (willRetry) {
     const backoff = BACKOFF_SECONDS[currentAttempts] ?? 300
-    await ctx.scheduler.runAfter(
-      backoff * 1000,
-      internal.sae.dispatch.toDigitalium,
-      { archiveId },
-    )
+    // Référence indirecte pour casser la dépendance circulaire de types
+    // (toDigitalium se réfère à lui-même via internal.sae.dispatch).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const selfRef = (internal.sae.dispatch as any).toDigitalium as Parameters<
+      typeof ctx.scheduler.runAfter
+    >[1]
+    await ctx.scheduler.runAfter(backoff * 1000, selfRef, { archiveId })
     return { retried: true }
   }
   return { retried: false, finalFailure: true }

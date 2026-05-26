@@ -50,9 +50,7 @@ export default async function AdminEquipePage() {
           </Badge>
         }
       />
-      <main
-        id="main"
-        tabIndex={-1}
+      <div
         style={{
           padding: "24px 32px",
           display: "flex",
@@ -100,7 +98,7 @@ export default async function AdminEquipePage() {
           canManage={canManage}
           enrollmentBaseUrl={enrollmentBaseUrl}
         />
-      </main>
+      </div>
     </>
   )
 }

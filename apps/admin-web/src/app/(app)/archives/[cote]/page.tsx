@@ -78,9 +78,7 @@ export default async function ArchiveDetailPage({
           </span>
         }
       />
-      <main
-        id="main"
-        tabIndex={-1}
+      <div
         style={{
           padding: "20px 32px",
           display: "flex",
@@ -359,7 +357,7 @@ export default async function ArchiveDetailPage({
             </dl>
           </Card>
         )}
-      </main>
+      </div>
     </>
   )
 }

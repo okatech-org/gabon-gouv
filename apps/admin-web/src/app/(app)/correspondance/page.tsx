@@ -139,22 +139,21 @@ export default async function CorrespondancePage({
         </aside>
 
         {/* Colonne 2 — Thread */}
-        <main
+        <section
+          aria-label="Détail du courrier sélectionné"
           style={{
             display: "flex",
             flexDirection: "column",
             background: "white",
             overflow: "hidden",
           }}
-          id="main"
-          tabIndex={-1}
         >
           {thread ? (
             <ThreadView thread={thread} correspondenceId={correspondenceId} />
           ) : (
             <EmptyState hasItems={list.length > 0} />
           )}
-        </main>
+        </section>
 
         {/* Colonne 3 — Meta */}
         <aside

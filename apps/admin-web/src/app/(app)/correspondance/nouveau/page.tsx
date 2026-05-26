@@ -38,9 +38,7 @@ export default async function NewCorrespondencePage() {
         title="Rédiger un nouveau courrier"
         subtitle="Sélectionnez le type, les destinataires et rédigez."
       />
-      <main
-        id="main"
-        tabIndex={-1}
+      <div
         style={{
           padding: "24px 32px",
           maxWidth: 880,
@@ -50,7 +48,7 @@ export default async function NewCorrespondencePage() {
         }}
       >
         <NewCorrespondenceWizard organisms={organisms} />
-      </main>
+      </div>
     </>
   )
 }
