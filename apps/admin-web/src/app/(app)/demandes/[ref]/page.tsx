@@ -31,6 +31,7 @@ import { VerificationsPanel } from "./verifications-panel"
 import { AssignmentPicker } from "./assignment-picker"
 import { SignatureCircuitPanel } from "./signature-circuit-panel"
 import { PrepareDocumentButton } from "./prepare-button"
+import { RevokeButton } from "./revoke-button"
 
 /* ============================================================
    Types — calqués sur api.admin.requests.getInstruction enrichi
@@ -467,6 +468,7 @@ export default async function AdminInstructionPage({
                   display: "flex",
                   gap: 16,
                   flexWrap: "wrap",
+                  alignItems: "center",
                   fontSize: 13,
                 }}
               >
@@ -480,9 +482,34 @@ export default async function AdminInstructionPage({
                   <strong>Émis :</strong>{" "}
                   {longDate(doc.issuedAt)}
                 </span>
-                <Badge tone={doc.hasPdf ? "success" : "warning"} size="sm">
-                  {doc.hasPdf ? "PDF disponible" : "PDF en cours de génération"}
+                <Badge
+                  tone={
+                    doc.status === "revoked"
+                      ? "danger"
+                      : doc.hasPdf
+                        ? "success"
+                        : "warning"
+                  }
+                  size="sm"
+                >
+                  {doc.status === "revoked"
+                    ? "Révoqué"
+                    : doc.hasPdf
+                      ? "PDF disponible"
+                      : "PDF en cours de génération"}
                 </Badge>
+                {/* Bouton révoquer — admin_organisme uniquement, et seulement
+                    si le doc n'est pas déjà révoqué. */}
+                {doc.status !== "revoked" &&
+                  session.agent.role === "admin_organisme" && (
+                    <div style={{ marginLeft: "auto" }}>
+                      <RevokeButton
+                        requestRef={instruction.ref}
+                        documentId={doc.id}
+                        actNumber={doc.actNumber}
+                      />
+                    </div>
+                  )}
               </div>
             </Card>
           )}

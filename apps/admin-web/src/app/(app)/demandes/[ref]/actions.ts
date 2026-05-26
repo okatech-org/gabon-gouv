@@ -337,6 +337,33 @@ export async function approveSignatureStepAction(
   }
 }
 
+/** Révoquer un acte émis (admin_organisme uniquement, Bloc 4). */
+export async function revokeDocumentAction(
+  ref: string,
+  documentId: string,
+  reason: string,
+): Promise<ActionResult> {
+  const trimmed = reason.trim()
+  if (!trimmed) return { ok: false, message: "Un motif est requis." }
+  const token = await requireSessionToken()
+  try {
+    const res = await convex.mutation(api.admin.mutations.revokeDocument, {
+      token,
+      documentId: asId(documentId),
+      reason: trimmed,
+    })
+    revalidatePath(`/demandes/${ref}`)
+    return {
+      ok: true,
+      message: res.already
+        ? "Document déjà révoqué."
+        : "Acte révoqué — citoyen notifié.",
+    }
+  } catch (error) {
+    return fail(error)
+  }
+}
+
 /** Refuser l'étape active d'un circuit de signature (commentaire obligatoire). */
 export async function refuseSignatureStepAction(
   ref: string | null,

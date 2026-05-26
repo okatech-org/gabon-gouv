@@ -15,6 +15,7 @@ import {
   Document,
   type DocumentProps,
   Font,
+  Image,
   Page,
   StyleSheet,
   Text,
@@ -22,6 +23,7 @@ import {
   renderToBuffer,
 } from "@react-pdf/renderer"
 import React from "react"
+import QRCode from "qrcode"
 
 /* ============================================================
    Données d'entrée
@@ -52,6 +54,12 @@ export interface ActePdfInput {
   payload: Record<string, unknown>
   /** Nom de l'agent signataire (pour l'apposition en pied de page). */
   signatoryName: string
+}
+
+/** Variante interne enrichie du QR pré-rendu (passée par renderActePdfBytes). */
+interface ActePdfInputWithQR extends ActePdfInput {
+  qrDataUrl?: string
+  verifyUrl?: string
 }
 
 /* ============================================================
@@ -162,9 +170,29 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 16,
   },
-  // Signature
-  signatureBlock: {
+  // Signature + QR
+  signatureRow: {
     marginTop: 32,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
+  qrBlock: {
+    width: 100,
+    alignItems: "center",
+  },
+  qrImage: {
+    width: 80,
+    height: 80,
+  },
+  qrLabel: {
+    fontSize: 7,
+    color: COLORS.ink500,
+    textAlign: "center",
+    marginTop: 4,
+    lineHeight: 1.3,
+  },
+  signatureBlock: {
     alignItems: "flex-end",
   },
   signatureLabel: { fontSize: 9, color: COLORS.ink700, marginBottom: 4 },
@@ -189,7 +217,7 @@ const styles = StyleSheet.create({
    Composant — Acte officiel générique
    ============================================================ */
 
-export function ActeOfficial(input: ActePdfInput): React.ReactElement {
+export function ActeOfficial(input: ActePdfInputWithQR): React.ReactElement {
   const issuedDate = new Date(input.issuedAt).toLocaleDateString("fr-FR", {
     day: "numeric",
     month: "long",
@@ -275,12 +303,25 @@ export function ActeOfficial(input: ActePdfInput): React.ReactElement {
           </Text>
         )}
 
-        {/* Signature */}
-        <View style={styles.signatureBlock}>
-          <Text style={styles.signatureLabel}>
-            Signé électroniquement par
-          </Text>
-          <Text style={styles.signatureName}>{input.signatoryName}</Text>
+        {/* QR vérification + Signature */}
+        <View style={styles.signatureRow}>
+          {input.qrDataUrl ? (
+            <View style={styles.qrBlock}>
+              {/* eslint-disable-next-line jsx-a11y/alt-text */}
+              <Image src={input.qrDataUrl} style={styles.qrImage} />
+              <Text style={styles.qrLabel}>
+                Scannez pour vérifier{"\n"}cet acte en ligne
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.qrBlock} />
+          )}
+          <View style={styles.signatureBlock}>
+            <Text style={styles.signatureLabel}>
+              Signé électroniquement par
+            </Text>
+            <Text style={styles.signatureName}>{input.signatoryName}</Text>
+          </View>
         </View>
 
         {/* Pied de page fixe */}
@@ -303,15 +344,38 @@ export function ActeOfficial(input: ActePdfInput): React.ReactElement {
 /**
  * Rend le composant ActeOfficial en bytes PDF (Uint8Array).
  * Utilisé par l'action Node qui appelle ensuite ctx.storage.store + sha256.
+ *
+ * Génère le QR code en data URL (PNG inline) en amont du rendu : `<Image>`
+ * de react-pdf accepte une data URL. La cible du QR est l'URL publique de
+ * vérification (gabon.connect/verifier/[code]).
  */
-export async function renderActePdfBytes(input: ActePdfInput): Promise<Uint8Array> {
+export async function renderActePdfBytes(
+  input: ActePdfInput,
+): Promise<Uint8Array> {
+  const verifyUrl = `${VERIFY_BASE_URL}/verifier/${input.verificationCode}`
+  const qrDataUrl = await QRCode.toDataURL(verifyUrl, {
+    errorCorrectionLevel: "M",
+    margin: 1,
+    width: 256,
+    color: { dark: "#1a4480", light: "#ffffff" }, // bleu institutionnel
+  })
+
   const buffer = await renderToBuffer(
-    ActeOfficial(input) as React.ReactElement<DocumentProps>,
+    ActeOfficial({ ...input, qrDataUrl, verifyUrl }) as React.ReactElement<
+      DocumentProps
+    >,
   )
-  // renderToBuffer renvoie un Buffer Node — on le convertit en Uint8Array
-  // pour rester portable côté typage.
   return new Uint8Array(buffer)
 }
+
+/**
+ * URL de base pour la vérification publique (peut être surchargée via
+ * variable d'environnement Convex `PUBLIC_BASE_URL`). Par défaut, le domaine
+ * citoyen prod.
+ */
+const VERIFY_BASE_URL =
+  (typeof process !== "undefined" && process.env?.PUBLIC_BASE_URL) ||
+  "https://gabon.connect"
 
 interface PayloadRow {
   key: string

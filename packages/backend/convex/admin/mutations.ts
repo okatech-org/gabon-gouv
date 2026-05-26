@@ -901,6 +901,79 @@ export const refuseSignatureStep = mutation({
   },
 })
 
+/* ---------- Révoquer un document émis (Bloc 4) ----------
+ *
+ * Permission `document.revoke` (admin_organisme uniquement, ADR-0006).
+ * Le motif est obligatoire (raison structurée + commentaire libre).
+ *
+ * Effet :
+ *   - patch document : status=revoked, revokedAt, revocationReason
+ *   - insert requestEvents kind=status_change
+ *   - notif citoyen (info, pas alarmiste : la révocation peut être due à
+ *     une réémission, une erreur sur l'acte, etc. — le motif explique)
+ *
+ * La demande (request) reste à status=issued historiquement — la révocation
+ * affecte l'acte (document), pas la demande qui l'a généré.
+ *
+ * Idempotent : un document déjà révoqué renvoie {already: true}.
+ */
+export const revokeDocument = mutation({
+  args: {
+    token: v.string(),
+    documentId: v.id("documents"),
+    reason: v.string(),
+  },
+  handler: async (ctx, { token, documentId, reason }) => {
+    const me = await requireAgent(ctx, token)
+    assertCan(actorFromAgent(me), "document.revoke")
+
+    const trimmed = reason.trim()
+    if (!trimmed) throw new Error("Un motif de révocation est requis.")
+
+    const doc = await ctx.db.get(documentId)
+    if (!doc) throw new Error("Document introuvable.")
+    if (doc.organismId !== me.organismId) {
+      throw new Error("Document hors de votre organisme.")
+    }
+    if (doc.status === "revoked") {
+      return { already: true as const, revokedAt: doc.revokedAt }
+    }
+
+    const now = Date.now()
+    await ctx.db.patch(documentId, {
+      status: "revoked",
+      revokedAt: now,
+      revocationReason: trimmed,
+    })
+
+    await ctx.db.insert("requestEvents", {
+      requestId: doc.requestId,
+      kind: "status_change",
+      title: "Acte révoqué",
+      description: `${doc.actNumber} révoqué : ${trimmed}`,
+      actor: me.name,
+      actorAgentId: me._id,
+      occurredAt: now,
+    })
+
+    // Notification citoyen — il doit savoir que son acte n'est plus valide
+    // pour pouvoir refaire une demande si besoin.
+    await ctx.db.insert("notifications", {
+      recipientKind: "citizen",
+      recipientId: String(doc.citizenId),
+      kind: "request_status_change",
+      severity: "warning",
+      title: "Votre acte a été révoqué",
+      body: `${doc.actNumber} : ${trimmed.slice(0, 140)}${trimmed.length > 140 ? "…" : ""}. Vous pouvez déposer une nouvelle demande si besoin.`,
+      linkTo: `/mon-espace/demandes/${(await ctx.db.get(doc.requestId))?.ref ?? ""}`,
+      linkedRequestId: doc.requestId,
+      createdAt: now,
+    })
+
+    return { already: false as const, revokedAt: now }
+  },
+})
+
 /* ---------- Verser au SAE (manuel — automatique sinon via signAndIssue) ---------- */
 export const verseToSAE = mutation({
   args: { token: v.string(), documentId: v.id("documents") },

@@ -46,7 +46,9 @@ import type * as lib_issuance from "../lib/issuance.js";
 import type * as lib_permissions from "../lib/permissions.js";
 import type * as lib_signatureCircuit from "../lib/signatureCircuit.js";
 import type * as lib_triggers from "../lib/triggers.js";
+import type * as http from "../http.js";
 import type * as platform_auth from "../platform/auth.js";
+import type * as public_verify from "../public/verify.js";
 import type * as platform_catalog from "../platform/catalog.js";
 import type * as platform_citizens from "../platform/citizens.js";
 import type * as platform_infrastructure from "../platform/infrastructure.js";
@@ -113,6 +115,8 @@ declare const fullApi: ApiFromModules<{
   "lib/permissions": typeof lib_permissions;
   "lib/signatureCircuit": typeof lib_signatureCircuit;
   "lib/triggers": typeof lib_triggers;
+  http: typeof http;
+  "public/verify": typeof public_verify;
   "platform/auth": typeof platform_auth;
   "platform/catalog": typeof platform_catalog;
   "platform/citizens": typeof platform_citizens;

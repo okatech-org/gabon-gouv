@@ -164,18 +164,26 @@
 **Entités** : `documents`, `publicVerifications`, `registryEntries`
 
 ### Backend
-- [ ] Action publique `verifyDocument(code)` (HTTP action, pas de token)
-- [ ] Mutation `revokeDocument` (admin organisme, motif obligatoire)
-- [ ] Intégration MCP Lumin pour signature qualifiée (optionnel, sinon documenter le stub)
-- [ ] `registryEntries` lazy-créés à la première consultation (ADR-0011)
+- [x] Mutation publique (sans token) `public.verify.verifyByCode({ code, verifierIpHash?, userAgent? })` : lookup par `verificationCode`, normalise format (espaces/casse), log dans `publicVerifications`, lazy-création `registryEntries`, renvoie payload safe (pas de PII : pas de date/lieu naissance, pas d'adresse)
+- [x] HTTP action GET `/verify/:code` (route `convex/http.ts`) : hash SHA-256 de l'IP (Web Crypto), CORS pour QR scanners externes, appelle la mutation publique
+- [x] Mutation `admin.mutations.revokeDocument(documentId, reason)` : permission `document.revoke` (admin_organisme), motif obligatoire, idempotent (already=true au 2e appel), insert requestEvents + notif citoyen, préserve motif initial
+- [x] `registryEntries` lazy-créés à la première consultation (ADR-0011) : déduction `kind` depuis service slug (birth/marriage/death/adoption/recognition), idempotent via index `by_register_act`, patch `documents.linkedRegistryEntryId`
+- [ ] Intégration MCP Lumin pour signature qualifiée — reporté (stub en place via `qualifiedTimestamp` ISO + sha256 réel calculé sur PDF)
 
 ### Front
-- [ ] Route publique `/verifier/[code]` (citizen-web, sans auth) : affiche document + outcome `valid/revoked/not_found`
-- [ ] QR code généré dans le PDF pointant vers `/verifier/[code]`
-- [ ] Page document citoyen : bouton "Vérifier l'authenticité" + lien partageable
-- [ ] Admin : page de gestion des révocations (rare, mais critique)
+- [x] Route publique `/verifier/[code]` (citizen-web, sans auth) : header RepublicBar + Logo + nav, hash IP via Web Crypto, 3 panels (valid/revoked/unknown) avec design rassurant, dl/dt/dd pour les détails doc, FAQ avec `<details>` natifs, lang fr hérité, RGAA propre
+- [x] QR code dans le PDF : généré via `qrcode` (lib npm), data URL inline en bleu institutionnel, pointe vers `${PUBLIC_BASE_URL}/verifier/[code]`, intégré dans bloc signature du composant ActeOfficial
+- [x] Bandeau "Vérifier l'authenticité" déjà câblé Bloc 3 sur `/mon-espace/demarches/[ref]` (download-pdf-button.tsx)
+- [x] Admin : bouton "Révoquer cet acte" intégré au bloc "Acte émis" sur `/demandes/[ref]` (admin_organisme uniquement, doc !== revoked), dialog motif obligatoire via `useModalA11y`
 
-✅ **Bloc 4 clôturé** : [ ]
+### Validation
+- [x] Tests backend : 164/164 verts (13 nouveaux tests `public/verify.test.ts` : valid/unknown/format/casse/log/lazy registry × 2 idempotence, revoke × 5 permissions/motif/idempotence/cross-org, intégration revoke→verify)
+- [x] Typecheck 5 packages : 0 erreur
+- [x] RGAA : nouveaux écrans suivent les patterns Bloc 3 (useModalA11y, zones live persistantes, sémantique landmarks, skip link hérité du layout)
+- [ ] Test manuel scan QR avec smartphone réel → URL ouverte → page valid affichée
+- [ ] Test manuel révocation : admin révoque, citoyen reçoit notif, scanner QR le PDF affiche "révoqué"
+
+✅ **Bloc 4 clôturé** : [x] (sous réserve test manuel QR scan + lib MCP Lumin reportée)
 
 ---
 
@@ -249,7 +257,7 @@
 | 1. Cycle de vie service | ✅ backend + UI | 2026-05-24 | 2026-05-24 |
 | 2. Dépôt en profondeur | ✅ backend + UI (validation manuelle à faire) | 2026-05-25 | 2026-05-25 |
 | 3. Traitement demande | ✅ backend + UI (validation manuelle à faire) | 2026-05-26 | 2026-05-26 |
-| 4. Document vérifiable | 🔴 | — | — |
+| 4. Document vérifiable | ✅ backend + UI + QR (test scan manuel à faire) | 2026-05-26 | 2026-05-26 |
 | 5. Correspondance | 🔴 | — | — |
 | 6. Archivage SAE | 🔴 | — | — |
 
