@@ -13,11 +13,13 @@ export const listInbox = query({
       .withIndex("by_to_organism", (q) => q.eq("toOrganismId", agent.organismId))
       .collect()
 
-    rows.sort((a, b) => b.sentAt - a.sentAt)
+    rows.sort((a, b) => (b.sentAt ?? 0) - (a.sentAt ?? 0))
 
     return Promise.all(
       rows.slice(0, limit ?? 50).map(async (c) => {
-        const fromOrg = await ctx.db.get(c.fromOrganismId)
+        const fromOrg = c.fromOrganismId
+          ? await ctx.db.get(c.fromOrganismId)
+          : null
         const read = await ctx.db
           .query("correspondenceReads")
           .withIndex("by_correspondence_agent", (q) =>
@@ -56,8 +58,12 @@ export const getThread = query({
     if (!correspondence) return null
 
     const [fromOrg, toOrg, messages, linkedCitizen, linkedRequest] = await Promise.all([
-      ctx.db.get(correspondence.fromOrganismId),
-      ctx.db.get(correspondence.toOrganismId),
+      correspondence.fromOrganismId
+        ? ctx.db.get(correspondence.fromOrganismId)
+        : null,
+      correspondence.toOrganismId
+        ? ctx.db.get(correspondence.toOrganismId)
+        : null,
       ctx.db
         .query("correspondenceMessages")
         .withIndex("by_correspondence", (q) =>
@@ -76,7 +82,7 @@ export const getThread = query({
       messages
         .sort((a, b) => a.sentAt - b.sentAt)
         .map(async (m) => {
-          const author = await ctx.db.get(m.fromAgentId)
+          const author = m.fromAgentId ? await ctx.db.get(m.fromAgentId) : null
           const authorOrg = author ? await ctx.db.get(author.organismId) : null
           return {
             fromAgentName: author?.name ?? "—",

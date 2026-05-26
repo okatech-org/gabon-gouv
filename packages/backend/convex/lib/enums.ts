@@ -350,24 +350,147 @@ export const registryKindValidator = literals(...REGISTRY_KINDS)
    Correspondance inter-administrations
    ============================================================ */
 
+/**
+ * Cycle de vie d'une correspondance (Bloc 5).
+ *
+ * Refonte vs v1 :
+ *   - `pending_validation` → `pending_signature` (cohérent avec Bloc 3 qui
+ *     parle de circuit "signature", pas "validation")
+ *   - NOUVEAU `acknowledged` : AR formel reçu (distinct du simple "ouvert")
+ *   - NOUVEAU `recalled` : rappel par l'expéditeur avant 1er AR
+ */
 export const CORRESPONDENCE_STATUSES = [
   "draft",
-  "pending_validation",
+  "pending_signature",
   "sent",
+  "acknowledged",
   "replied",
   "closed",
   "archived",
+  "recalled",
 ] as const
 export type CorrespondenceStatus = (typeof CORRESPONDENCE_STATUSES)[number]
 export const correspondenceStatusValidator = literals(...CORRESPONDENCE_STATUSES)
 
+/**
+ * 4 niveaux de confidentialité (Bloc 5 — ajout de "secret" vs v1).
+ * - public      : ouvert à tous (rare, ex. circulaire publique)
+ * - restricted  : interne à l'administration
+ * - confidential: limité aux destinataires + circuit hiérarchique
+ * - secret      : secret défense ou équivalent (PJ chiffrées spécifiquement)
+ */
 export const CONFIDENTIALITY_LEVELS = [
   "public",
   "restricted",
   "confidential",
+  "secret",
 ] as const
 export type ConfidentialityLevel = (typeof CONFIDENTIALITY_LEVELS)[number]
 export const confidentialityLevelValidator = literals(...CONFIDENTIALITY_LEVELS)
+
+/**
+ * 16 kinds répartis en 6 familles (Bloc 5 §4).
+ * Conditionnent les règles (circuit obligatoire, PJ obligatoire, DUA, délais)
+ * stockées dans la table `correspondenceKindRules`.
+ */
+export const CORRESPONDENCE_KINDS = [
+  // 1. Instruction (liée à un dossier en cours)
+  "instruction_request",
+  "instruction_transmission",
+  "instruction_response",
+  // 2. Décision (ouvre des délais de recours)
+  "decision_grant",
+  "decision_reject",
+  "decision_suspend",
+  // 3. Coopération (sans demande sous-jacente obligatoire)
+  "cooperation_info_share",
+  "cooperation_data_request",
+  "cooperation_fraud_alert",
+  // 4. Saisine / escalade
+  "escalation_tutelle",
+  "escalation_dispute",
+  "escalation_incident",
+  // 5. Gestion interne
+  "internal_circular",
+  "internal_service_note",
+  // 6. Protocole
+  "protocol_greeting",
+  "protocol_condolences",
+  // Fallback
+  "other",
+] as const
+export type CorrespondenceKind = (typeof CORRESPONDENCE_KINDS)[number]
+export const correspondenceKindValidator = literals(...CORRESPONDENCE_KINDS)
+
+/** Rôle d'un destinataire dans une correspondance (modèle email). */
+export const CORRESPONDENCE_RECIPIENT_ROLES = ["to", "cc", "bcc"] as const
+export type CorrespondenceRecipientRole =
+  (typeof CORRESPONDENCE_RECIPIENT_ROLES)[number]
+export const correspondenceRecipientRoleValidator = literals(
+  ...CORRESPONDENCE_RECIPIENT_ROLES,
+)
+
+/** Type d'émetteur/récepteur (polymorphe). */
+export const CORRESPONDENCE_PARTY_KINDS = [
+  "organism",
+  "citizen",
+  "external",
+  "platform",
+] as const
+export type CorrespondencePartyKind =
+  (typeof CORRESPONDENCE_PARTY_KINDS)[number]
+export const correspondencePartyKindValidator = literals(
+  ...CORRESPONDENCE_PARTY_KINDS,
+)
+
+/** Kind d'une partie externe (notaire, ambassade…). */
+export const EXTERNAL_PARTY_KINDS = [
+  "notary",
+  "bailiff",
+  "embassy",
+  "court",
+  "private_org",
+  "other",
+] as const
+export type ExternalPartyKind = (typeof EXTERNAL_PARTY_KINDS)[number]
+export const externalPartyKindValidator = literals(...EXTERNAL_PARTY_KINDS)
+
+/** Origine d'une PJ (acte officiel vs PDF/image externe). */
+export const CORRESPONDENCE_ATTACHMENT_KINDS = ["document", "external"] as const
+export type CorrespondenceAttachmentKind =
+  (typeof CORRESPONDENCE_ATTACHMENT_KINDS)[number]
+export const correspondenceAttachmentKindValidator = literals(
+  ...CORRESPONDENCE_ATTACHMENT_KINDS,
+)
+
+/** Format du corps d'un message. */
+export const MESSAGE_BODY_FORMATS = ["plain", "markdown"] as const
+export type MessageBodyFormat = (typeof MESSAGE_BODY_FORMATS)[number]
+export const messageBodyFormatValidator = literals(...MESSAGE_BODY_FORMATS)
+
+/** Émetteur d'un message dans le thread (3 cas — admin, citoyen, système). */
+export const CORRESPONDENCE_MESSAGE_FROM_KINDS = [
+  "agent",
+  "citizen",
+  "system",
+] as const
+export type CorrespondenceMessageFromKind =
+  (typeof CORRESPONDENCE_MESSAGE_FROM_KINDS)[number]
+export const correspondenceMessageFromKindValidator = literals(
+  ...CORRESPONDENCE_MESSAGE_FROM_KINDS,
+)
+
+/** Statut d'un template de correspondance (pattern documentTemplates). */
+export const CORRESPONDENCE_TEMPLATE_STATUSES = [
+  "draft",
+  "active",
+  "deprecated",
+] as const
+export type CorrespondenceTemplateStatus =
+  (typeof CORRESPONDENCE_TEMPLATE_STATUSES)[number]
+export const correspondenceTemplateStatusValidator = literals(
+  ...CORRESPONDENCE_TEMPLATE_STATUSES,
+)
 
 /* ============================================================
    Circuits de signature polymorphes (ADR-0009)
@@ -509,6 +632,12 @@ export const NOTIFICATION_KINDS = [
   "onboarding_update",
   // transverse
   "service_published",
+  // Bloc 5 — Correspondance
+  "correspondence_received",
+  "correspondence_acknowledged",
+  "correspondence_replied",
+  "correspondence_recalled",
+  "correspondence_deadline_approaching",
 ] as const
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number]
 export const notificationKindValidator = literals(...NOTIFICATION_KINDS)

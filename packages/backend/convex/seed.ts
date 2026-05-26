@@ -1583,8 +1583,53 @@ export const reset = mutation({
     })
 
     // ════════════════════════════════════════════════════════
-    // 11. Correspondance inter-admin
+    // 11. Correspondance inter-admin (Bloc 5)
     // ════════════════════════════════════════════════════════
+
+    // 11a. Seed des règles métier par kind (16 valeurs cf spec §4.2)
+    const KIND_RULES = [
+      ["instruction_request", false, false, "5y", 7, 30, 90, "restricted"],
+      ["instruction_transmission", false, false, "5y", 7, 30, 90, "restricted"],
+      ["instruction_response", false, false, "5y", 7, 30, 90, "restricted"],
+      ["decision_grant", true, true, "30y", 7, undefined, 90, "restricted"],
+      ["decision_reject", true, true, "30y", 7, undefined, 90, "restricted"],
+      ["decision_suspend", true, true, "30y", 7, undefined, 90, "restricted"],
+      ["cooperation_info_share", false, false, "2y", 14, 30, 90, "restricted"],
+      ["cooperation_data_request", false, false, "2y", 14, 30, 90, "restricted"],
+      ["cooperation_fraud_alert", false, false, "5y", 3, 14, 90, "confidential"],
+      ["escalation_tutelle", true, true, "50y", 3, 14, 180, "confidential"],
+      ["escalation_dispute", true, true, "50y", 3, 14, 180, "confidential"],
+      ["escalation_incident", true, true, "50y", 3, 14, 180, "confidential"],
+      ["internal_circular", false, false, "indef", undefined, undefined, undefined, "restricted"],
+      ["internal_service_note", false, false, "5y", undefined, undefined, 90, "restricted"],
+      ["protocol_greeting", false, false, "1y", undefined, undefined, 30, "public"],
+      ["protocol_condolences", false, false, "1y", undefined, undefined, 30, "public"],
+      ["other", false, false, "5y", 14, 30, 90, "restricted"],
+    ] as const
+    for (const [
+      kind,
+      requiresCircuit,
+      requiresAttachment,
+      duaCode,
+      ackDeadlineDays,
+      replyDeadlineDays,
+      autoCloseAfterDays,
+      defaultConfidentiality,
+    ] of KIND_RULES) {
+      await ctx.db.insert("correspondenceKindRules", {
+        kind,
+        requiresCircuit,
+        requiresAttachment,
+        duaCode,
+        ackDeadlineDays,
+        replyDeadlineDays,
+        autoCloseAfterDays,
+        defaultConfidentiality,
+      })
+    }
+
+    // 11b. Correspondance exemple (rétrocompat — sera enrichie en Phase B
+    // avec recipients, acks, attachments structurés)
     const cr1 = await ctx.db.insert("correspondences", {
       ref: "CR-2026-1842",
       fromOrganismId: dgDocumentation,

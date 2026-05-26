@@ -72,10 +72,25 @@ export type Action =
   // du step `current` (cf. `lib/signatureCircuit.ts`).
   | "signature.approve"
   | "signature.refuse"
-  // Correspondance inter-admin
-  | "correspondence.send"
+  // Correspondance inter-admin (Bloc 5 — refonte exhaustive)
   | "correspondence.read"
+  | "correspondence.create"               // créer un brouillon
+  | "correspondence.send"                 // soumettre brouillon → circuit
+  | "correspondence.send_direct"          // envoyer sans circuit (kind autorisé)
   | "correspondence.sign_smime"
+  | "correspondence.acknowledge"          // AR formel
+  | "correspondence.reply"
+  | "correspondence.recall"               // rappel (admin_organisme only, avant 1er AR)
+  | "correspondence.archive"
+  | "correspondence.close"
+  | "correspondence.escalate"             // saisine tutelle (admin_organisme)
+  | "correspondence.platform_read"        // platform_admin : escalations
+  | "correspondence.template.crud"        // admin_technique
+  // Citoyen
+  | "correspondence.citizen.read"
+  | "correspondence.citizen.send"
+  | "correspondence.citizen.reply"
+  | "correspondence.citizen.acknowledge"
   // Archives SAE
   | "archive.verse"
   | "archive.read"
@@ -181,6 +196,11 @@ const CITIZEN_ALLOWED = new Set<Action>([
   "request.cancel",
   "piece.upload",
   "document.read",
+  // Bloc 5 — Correspondance
+  "correspondence.citizen.read",
+  "correspondence.citizen.send",
+  "correspondence.citizen.reply",
+  "correspondence.citizen.acknowledge",
 ])
 
 // Actions qu'un agent (quel que soit son rôle) peut faire dans son organisme.
@@ -205,8 +225,13 @@ const AGENT_INSTRUCTEUR_ALLOWED = new Set<Action>([
   // d'approuver un step qui n'est pas le sien.
   "signature.approve",
   "signature.refuse",
+  // Bloc 5 — Correspondance : l'instructeur peut créer brouillons, soumettre
+  // pour signature, accuser réception, répondre. Pas de send_direct (chef+).
+  "correspondence.create",
   "correspondence.send",
   "correspondence.sign_smime",
+  "correspondence.acknowledge",
+  "correspondence.reply",
 ])
 
 const AGENT_SUPERVISEUR_ALLOWED = new Set<Action>([
@@ -223,6 +248,12 @@ const CHEF_SERVICE_ALLOWED = new Set<Action>([
   // que l'agent est bien l'assignee du step current.
   "signature.approve",
   "signature.refuse",
+  // Bloc 5 — Correspondance : le chef peut envoyer sans circuit pour les
+  // kinds autorisés (cooperation_*, protocol_*, internal_service_note),
+  // archiver et clôturer.
+  "correspondence.send_direct",
+  "correspondence.archive",
+  "correspondence.close",
   // Gestion catalogue services : config métier sans publication
   "service.create",
   "service.update",
@@ -256,6 +287,9 @@ const ADMIN_ORGANISME_ALLOWED = new Set<Action>([
   "service.archive",
   "service.template.validate",
   "service.template.activate",
+  // Bloc 5 — Correspondance : rappel (avant 1er AR) + saisines de la tutelle
+  "correspondence.recall",
+  "correspondence.escalate",
   // Dossiers et conventions
   "dossier.grant_access",
   "dossier.revoke_access",
@@ -266,7 +300,9 @@ const ADMIN_ORGANISME_ALLOWED = new Set<Action>([
 ])
 
 const ADMIN_TECHNIQUE_ALLOWED = new Set<Action>([
-  // Profil DSI/intégration — pas d'actions métier, juste lecture.
+  // Profil DSI/intégration — pas d'actions métier, juste lecture +
+  // gestion des templates de correspondance (Bloc 5).
+  "correspondence.template.crud",
 ])
 
 const PLATFORM_ADMIN_ALLOWED = new Set<Action>([
@@ -286,6 +322,7 @@ const PLATFORM_ADMIN_ALLOWED = new Set<Action>([
   // Lecture cross-organisme
   "request.read.organism",
   "correspondence.read",
+  "correspondence.platform_read", // toutes les saisines escalation_*
   "archive.read",
   "dossier.read",
 ])
