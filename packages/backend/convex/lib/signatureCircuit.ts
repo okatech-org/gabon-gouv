@@ -23,6 +23,7 @@ import type {
   SignatureSubjectKind,
 } from "./enums"
 import { finalizeIssuance } from "./issuance"
+import { performCorrespondenceSend } from "./correspondenceLifecycle"
 
 // ============================================================
 // Création d'un circuit
@@ -261,7 +262,12 @@ async function onCircuitCompleted(
       const crId = circuit.subjectId as Id<"correspondences">
       const cr = await ctx.db.get(crId)
       if (cr) {
-        await ctx.db.patch(crId, { status: "sent" })
+        // Délègue à performCorrespondenceSend (Bloc 5) qui :
+        // - insère le 1er message signé S/MIME
+        // - calcule échéances + DUA
+        // - patch status=sent
+        // - notifie les destinataires
+        await performCorrespondenceSend(ctx, cr, lastApproverAgentId)
       }
       break
     }

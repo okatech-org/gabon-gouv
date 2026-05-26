@@ -11,6 +11,8 @@
 import type * as admin_archives from "../admin/archives.js";
 import type * as admin_citizens from "../admin/citizens.js";
 import type * as admin_correspondence from "../admin/correspondence.js";
+import type * as admin_correspondenceLifecycle from "../admin/correspondenceLifecycle.js";
+import type * as admin_correspondenceQueries from "../admin/correspondenceQueries.js";
 import type * as admin_dashboard from "../admin/dashboard.js";
 import type * as admin_directory from "../admin/directory.js";
 import type * as admin_documentTemplates from "../admin/documentTemplates.js";
@@ -28,6 +30,7 @@ import type * as aggregates from "../aggregates.js";
 import type * as auth from "../auth.js";
 import type * as citizen_auth from "../citizen/auth.js";
 import type * as citizen_catalog from "../citizen/catalog.js";
+import type * as citizen_correspondence from "../citizen/correspondence.js";
 import type * as citizen_dashboard from "../citizen/dashboard.js";
 import type * as citizen_directory from "../citizen/directory.js";
 import type * as citizen_documents from "../citizen/documents.js";
@@ -82,6 +85,8 @@ declare const fullApi: ApiFromModules<{
   "admin/archives": typeof admin_archives;
   "admin/citizens": typeof admin_citizens;
   "admin/correspondence": typeof admin_correspondence;
+  "admin/correspondenceLifecycle": typeof admin_correspondenceLifecycle;
+  "admin/correspondenceQueries": typeof admin_correspondenceQueries;
   "admin/dashboard": typeof admin_dashboard;
   "admin/directory": typeof admin_directory;
   "admin/documentTemplates": typeof admin_documentTemplates;
@@ -99,6 +104,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   "citizen/auth": typeof citizen_auth;
   "citizen/catalog": typeof citizen_catalog;
+  "citizen/correspondence": typeof citizen_correspondence;
   "citizen/dashboard": typeof citizen_dashboard;
   "citizen/directory": typeof citizen_directory;
   "citizen/documents": typeof citizen_documents;

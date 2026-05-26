@@ -297,6 +297,75 @@ export async function notifyRecipientsOnSend(
 }
 
 /* ============================================================
+   Envoi effectif d'une correspondance (factorisé entre sendDirect
+   et onCircuitCompleted)
+   ============================================================ */
+
+/**
+ * Exécute l'envoi effectif d'une correspondance :
+ *   - insert du 1er message dans le thread (signé S/MIME stub)
+ *   - calcul des échéances (AR, réponse, DUA) selon le kind
+ *   - patch correspondences.status=sent + sentAt
+ *   - notification des destinataires
+ *
+ * Appelé soit par `admin.correspondenceLifecycle.sendDirect` (pas de circuit),
+ * soit par `onCircuitCompleted` quand la dernière étape du circuit signature
+ * est validée pour subjectKind="correspondence".
+ */
+export async function performCorrespondenceSend(
+  ctx: MutationCtx,
+  correspondence: Doc<"correspondences">,
+  senderAgentId: Id<"agents">,
+): Promise<void> {
+  if (!correspondence.kind) {
+    throw new Error("Kind manquant — impossible d'envoyer.")
+  }
+  const sender = await ctx.db.get(senderAgentId)
+  if (!sender) throw new Error("Émetteur introuvable.")
+
+  // Import dynamique pour éviter le cycle d'import (smime.ts charge node:crypto)
+  const { signMessage } = await import("./smime.js")
+
+  const now = Date.now()
+  const rule = await loadKindRule(ctx, correspondence.kind)
+  const dueAckAt = computeAckDeadline(rule, now)
+  const dueReplyAt = computeReplyDeadline(rule, now)
+  const duaExpiresAt = computeDuaExpiresAt(rule, now)
+
+  const signature = signMessage({
+    body: correspondence.body,
+    agentId: senderAgentId,
+    sentAt: now,
+  })
+  await ctx.db.insert("correspondenceMessages", {
+    correspondenceId: correspondence._id,
+    fromKind: "agent",
+    fromAgentId: senderAgentId,
+    fromOrganismIdSnapshot: sender.organismId,
+    body: correspondence.body,
+    bodyFormat: correspondence.bodyFormat ?? "plain",
+    signed: true,
+    signatureFingerprint: signature.signatureFingerprint,
+    signatureAlgorithm: signature.signatureAlgorithm,
+    signedAt: signature.signedAt,
+    sentAt: now,
+  })
+
+  await ctx.db.patch(correspondence._id, {
+    status: "sent",
+    sentAt: now,
+    dueAckAt,
+    dueReplyAt,
+    duaExpiresAt,
+    messagesCount: 1,
+  })
+
+  // Re-charge pour notifier avec sentAt à jour
+  const updated = await ctx.db.get(correspondence._id)
+  if (updated) await notifyRecipientsOnSend(ctx, updated)
+}
+
+/* ============================================================
    Format de référence
    ============================================================ */
 
