@@ -136,6 +136,9 @@ export type Action =
   | "team.disable_agent"
   | "team.enable_agent"
   | "team.change_role"
+  // Onboarding réel (Phase Trous C) — l'admin_organisme peut clôturer
+  // lui-même son process onboarding et passer organism.status à "active"
+  | "organism.finalize_self"
 
 // ============================================================
 // Règle pure (role-based) — toutes les actions qui peuvent se
@@ -308,6 +311,8 @@ const ADMIN_ORGANISME_ALLOWED = new Set<Action>([
   "team.disable_agent",
   "team.enable_agent",
   "team.change_role",
+  // Phase Trous C — clôture self-service de l'onboarding
+  "organism.finalize_self",
   // Legacy
   "service.draft",
   "service.edit",

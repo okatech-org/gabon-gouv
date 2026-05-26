@@ -66,6 +66,10 @@ export async function registerOrganismAction(formData: FormData): Promise<Action
   const siege = String(formData.get("siege") ?? "").trim() || undefined
   const contactEmail = String(formData.get("contactEmail") ?? "").trim() || undefined
   const phone = String(formData.get("phone") ?? "").trim() || undefined
+  const firstAdminEmail =
+    String(formData.get("firstAdminEmail") ?? "").trim() || undefined
+  const firstAdminFunction =
+    String(formData.get("firstAdminFunction") ?? "").trim() || undefined
 
   if (!name) return { ok: false, message: "Le nom est requis." }
   if (!category) return { ok: false, message: "La catégorie est requise." }
@@ -82,11 +86,17 @@ export async function registerOrganismAction(formData: FormData): Promise<Action
       siege,
       contactEmail,
       phone,
+      firstAdminEmail,
+      firstAdminFunction,
     })
     revalidatePath("/organisations")
     revalidatePath("/onboarding")
     revalidatePath("/")
-    return { ok: true, message: `Organisme « ${name} » enregistré en onboarding.`, data: result }
+    return {
+      ok: true,
+      message: `Organisme « ${name} » enregistré en onboarding.`,
+      data: { ...result, firstAdminEmail: firstAdminEmail ?? null },
+    }
   } catch (error) {
     return fail(error)
   }

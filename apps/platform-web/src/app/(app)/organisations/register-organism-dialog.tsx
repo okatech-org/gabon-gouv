@@ -25,10 +25,17 @@ const PROVINCES: Array<[string, string]> = [
   ["woleu_ntem", "Woleu-Ntem"],
 ]
 
+interface SuccessData {
+  orgName: string
+  enrollmentUrl: string | null
+  firstAdminEmail: string | null
+}
+
 export function RegisterOrganismDialog() {
   const [open, setOpen] = useState(false)
   const [pending, startTransition] = useTransition()
   const [feedback, setFeedback] = useState<{ ok: boolean; message: string } | null>(null)
+  const [success, setSuccess] = useState<SuccessData | null>(null)
 
   if (!open) {
     return (
@@ -36,6 +43,12 @@ export function RegisterOrganismDialog() {
         Enregistrer une administration
       </Button>
     )
+  }
+
+  const close = () => {
+    setOpen(false)
+    setSuccess(null)
+    setFeedback(null)
   }
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -48,8 +61,22 @@ export function RegisterOrganismDialog() {
         ok: result.ok,
         message: result.message ?? (result.ok ? "OK" : "Erreur"),
       })
-      if (result.ok) {
-        setOpen(false)
+      if (result.ok && result.data) {
+        const d = result.data as {
+          firstAdminInvitationToken?: string | null
+          firstAdminEmail?: string | null
+        }
+        const name = String(form.get("name") ?? "").trim()
+        if (d.firstAdminInvitationToken) {
+          // Reste ouvert pour montrer le lien
+          setSuccess({
+            orgName: name,
+            firstAdminEmail: d.firstAdminEmail ?? null,
+            enrollmentUrl: `${window.location.origin.replace(/console\.|admin\./, "admin.")}/enrolement/${d.firstAdminInvitationToken}`,
+          })
+        } else {
+          close()
+        }
       }
     })
   }
@@ -145,18 +172,138 @@ export function RegisterOrganismDialog() {
             <TextInput name="contactEmail" placeholder="contact@orga.gouv.ga" />
           </Field>
 
+          <div
+            style={{
+              marginTop: 6,
+              padding: "12px 14px",
+              background: "var(--ink-50)",
+              borderRadius: 8,
+              border: "1px solid var(--ink-150)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+            }}
+          >
+            <p
+              style={{
+                margin: 0,
+                fontSize: 13,
+                fontWeight: 600,
+                color: "var(--ink-800)",
+              }}
+            >
+              Premier administrateur (optionnel)
+            </p>
+            <p style={{ fontSize: 12.5, color: "var(--ink-600)", margin: 0 }}>
+              Si renseigné, une invitation pending sera générée. Vous
+              recopierez le lien d&apos;enrôlement à l&apos;étape suivante
+              pour le transmettre à l&apos;invité.
+            </p>
+            <Field label="E-mail du 1er admin organisme">
+              <TextInput
+                name="firstAdminEmail"
+                type="email"
+                placeholder="admin@orga.gouv.ga"
+              />
+            </Field>
+            <Field label="Fonction (optionnel)">
+              <TextInput
+                name="firstAdminFunction"
+                placeholder="Secrétaire général, DSI…"
+              />
+            </Field>
+          </div>
+
           {feedback && !feedback.ok && <Alert tone="danger">{feedback.message}</Alert>}
 
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
-            <Button variant="ghost" type="button" onClick={() => setOpen(false)}>
-              Annuler
-            </Button>
-            <Button type="submit" iconRight="arrowRight" disabled={pending}>
-              {pending ? "Création…" : "Créer et lancer l'onboarding"}
-            </Button>
-          </div>
+          {!success ? (
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
+              <Button variant="ghost" type="button" onClick={close}>
+                Annuler
+              </Button>
+              <Button type="submit" iconRight="arrowRight" disabled={pending}>
+                {pending ? "Création…" : "Créer et lancer l'onboarding"}
+              </Button>
+            </div>
+          ) : (
+            <SuccessSummary success={success} onClose={close} />
+          )}
         </form>
       </div>
+    </div>
+  )
+}
+
+function SuccessSummary({
+  success,
+  onClose,
+}: {
+  success: SuccessData
+  onClose: () => void
+}) {
+  const [copied, setCopied] = useState(false)
+  const copy = async () => {
+    if (!success.enrollmentUrl) return
+    try {
+      await navigator.clipboard.writeText(success.enrollmentUrl)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2500)
+    } catch {
+      /* fallback : sélection manuelle */
+    }
+  }
+  return (
+    <div
+      role="region"
+      aria-label="Invitation générée"
+      style={{
+        background: "var(--success-50)",
+        border: "1px solid var(--success-200)",
+        borderRadius: 8,
+        padding: 14,
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+      }}
+    >
+      <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "var(--success-700)" }}>
+        ✓ {success.orgName} créé. Invitation envoyée à {success.firstAdminEmail}.
+      </p>
+      {success.enrollmentUrl && (
+        <>
+          <p style={{ margin: 0, fontSize: 12.5, color: "var(--ink-700)" }}>
+            Transmettez ce lien d&apos;enrôlement (valide 14 jours) :
+          </p>
+          <div
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 11.5,
+              background: "white",
+              border: "1px solid var(--ink-200)",
+              padding: 8,
+              borderRadius: 4,
+              wordBreak: "break-all",
+              userSelect: "all",
+            }}
+          >
+            {success.enrollmentUrl}
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={copy}
+              icon={copied ? "checkCircle" : "copy"}
+            >
+              {copied ? "Copié" : "Copier le lien"}
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+              Fermer
+            </Button>
+          </div>
+        </>
+      )}
     </div>
   )
 }

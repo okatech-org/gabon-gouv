@@ -119,6 +119,12 @@ export const registerOrganism = mutation({
     contactEmail: v.optional(v.string()),
     decretCreation: v.optional(v.string()),
     connectionKind: v.optional(organismConnectionValidator),
+    // Phase Trous C — bootstrap onboarding : optionnellement créer une
+    // invitation pour le 1er admin_organisme en même temps que l'organism.
+    // Le platform_admin reçoit en retour `firstAdminInvitationToken` à
+    // transmettre à l'invité (lien `/enrolement/{token}`).
+    firstAdminEmail: v.optional(v.string()),
+    firstAdminFunction: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const { actor, agent } = await requirePlatformAdmin(ctx, args.token)
@@ -183,9 +189,61 @@ export const registerOrganism = mutation({
       organismId,
     })
 
-    return { organismId, processId }
+    // Bootstrap : crée l'invitation pour le 1er admin_organisme (Phase C).
+    // On NE peut pas appeler la mutation team.inviteAgent car elle requiert
+    // un agent du même organisme — on insère directement ici (platform admin
+    // a déjà passé requirePlatformAdmin).
+    let firstAdminInvitationToken: string | null = null
+    if (args.firstAdminEmail) {
+      const email = args.firstAdminEmail.trim().toLowerCase()
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        throw new Error("Adresse e-mail du 1er admin invalide.")
+      }
+      const tokenStr = generateInvitationToken()
+      await ctx.db.insert("agentInvitations", {
+        organismId,
+        email,
+        role: "admin_organisme",
+        functionTitle: args.firstAdminFunction?.trim() || undefined,
+        authMethod: "nip_only",
+        token: tokenStr,
+        expiresAt: Date.now() + 14 * 24 * 60 * 60 * 1000,
+        createdAt: Date.now(),
+        createdByAgentId: agent._id, // platform admin agent
+        onboardingProcessId: processId,
+      })
+      firstAdminInvitationToken = tokenStr
+      await logActivity(ctx, {
+        actorAgentId: agent._id,
+        actorDisplayName: agent.name,
+        verb: "a invité le 1er admin de",
+        subjectKind: "organisms",
+        subjectId: String(organismId),
+        subjectLabel: `${trimmedName} (${email})`,
+        linkTo: "/organisations",
+        iconKey: "userCheck",
+        organismId,
+      })
+    }
+
+    return { organismId, processId, firstAdminInvitationToken }
   },
 })
+
+/**
+ * Génère un token d'invitation (cf. admin/team.ts pour la version partagée).
+ * Volontairement dupliqué ici pour éviter une dépendance circulaire entre
+ * platform/ et admin/ — les deux peuvent insérer dans `agentInvitations`.
+ */
+function generateInvitationToken(): string {
+  let out = ""
+  for (let i = 0; i < 16; i++) {
+    out += Math.floor(Math.random() * 0xffffffff)
+      .toString(16)
+      .padStart(8, "0")
+  }
+  return out.slice(0, 64)
+}
 
 export const suspendOrganism = mutation({
   args: {

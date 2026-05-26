@@ -22,6 +22,7 @@ import {
 import { api } from "@workspace/backend/generated"
 import { convex } from "@/lib/convex"
 import { getCurrentAgent } from "@/lib/current-agent"
+import { FirstStepsBanner } from "./first-steps-banner"
 import {
   isUrgentDue,
   relativeTime,
@@ -79,9 +80,14 @@ export default async function AdminDashboardPage() {
   const session = await getCurrentAgent()
   if (!session) redirect("/login")
 
-  const dashboard = (await convex.query(api.admin.dashboard.getDashboard, {
-    token: session.token,
-  })) as DashboardData
+  const [dashboard, onboardingStatus] = await Promise.all([
+    convex.query(api.admin.dashboard.getDashboard, {
+      token: session.token,
+    }) as Promise<DashboardData>,
+    convex.query(api.admin.onboarding.getOnboardingStatus, {
+      token: session.token,
+    }),
+  ])
 
   const firstName = session.agent.name.split(" ")[0]
   const queuedKpi = dashboard.kpis.find((k) => k.label === "En file d'attente")?.value ?? "—"
@@ -117,6 +123,14 @@ export default async function AdminDashboardPage() {
           width: "100%",
         }}
       >
+        {onboardingStatus?.isOnboarding && onboardingStatus.canFinalize && (
+          <FirstStepsBanner
+            organismName={onboardingStatus.organismName}
+            checklist={onboardingStatus.checklist}
+            completedCount={onboardingStatus.completedCount}
+            totalSteps={onboardingStatus.totalSteps}
+          />
+        )}
         {/* KPI top */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12 }}>
           {dashboard.kpis.map((k) => (
