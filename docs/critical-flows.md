@@ -111,35 +111,51 @@
 
 **Entités** : `requests`, `pieces`, `verifications`, `requestEvents`, `signatureCircuits`, `signatureCircuitSteps`, `documents`
 
+> Spec préalable détaillée : [`request-processing-spec.md`](./request-processing-spec.md)
+
 ### Backend
-- [ ] Mutation `assignRequest` 🟢 (existe — vérifier UI)
-- [ ] Mutation `validatePiece` 🟢 (existe — câbler UI)
-- [ ] Mutation `rejectPiece` 🟢 (existe — câbler UI)
-- [ ] Mutation `prepareDocument` 🟢 (existe — vérifier UI)
-- [ ] Mutation `signAndIssue` 🟢 (existe — vérifier production PDF réel)
-- [ ] Mutation `verseToSAE` 🟢 (existe — câbler bouton)
-- [ ] Génération **réelle** de PDF (jsPDF ou puppeteer ou Convex action) + storage Convex (`pdfStorageKey`)
-- [ ] Horodatage qualifié (`qualifiedTimestamp`) : provider réel (RFC 3161) ou stub documenté
-- [ ] Code de vérification court (`verificationCode`) généré automatiquement
-- [ ] Query `listMySignatures` (agent : circuits où il est assignee)
-- [ ] Trigger : à `signAndIssue`, créer entrée `documents` + `requestEvents` + push notif citoyen
+- [x] `lib/issuance.ts:finalizeIssuance(documentId, actorAgentId)` — émission unifiée (sha256, verificationCode unique, qualifiedTimestamp stub, patch document=issued + request=issued, archive squelette, notif citoyen)
+- [x] Refonte `signAndIssue` — préconditions strictes (pièces+vérifs), limité services à signature simple (≤1 step), délègue à finalizeIssuance
+- [x] Refonte `prepareDocument` — résolution dynamique assignees depuis `services.defaultSignatureCircuitTemplate`, fallback args legacy
+- [x] Refonte `refuseSignatureStep` — rebascule demande à `in_instruction` + notif préparateur (décision § 11.3)
+- [x] Refonte `onCircuitCompleted` (document) → délègue à finalizeIssuance (status passe direct à `issued`, plus de `signed` intermédiaire)
+- [x] Mutation `setVerificationStatus(verificationId, status, evidence?)` + permission `verification.update`
+- [x] Stub `seedDefaultVerifications` automatique à `submitRequest` (identity=ok si IDN, data_consistency+duplicate_detection=pending)
+- [x] Permissions Bloc 3 : `verification.update`, `signature.approve`, `signature.refuse` (vérif dynamique d'assignee dans handler)
+- [x] Query `admin.requests.getInstruction` enrichie (variant, document, circuit avec steps assignees, pieces.hasFile+ids)
+- [x] Query `admin.requests.getPieceViewUrl(pieceId)` — URL signée Convex storage
+- [x] Query `admin.requests.getDocumentPdfUrl(documentId)` — version agent
+- [x] Query `citizen.requests.getMyDocumentPdfUrl(ref)` — version citoyen avec vérif ownership
+- [x] Module `admin/signatures.ts` : `listMine(scope?)` + `countMyPending`
+- [x] Génération **réelle** de PDF : Convex action Node `pdf/action.ts:generateDocumentPdf` avec `@react-pdf/renderer` + composant `ActeOfficial` générique. Schedule depuis finalizeIssuance, calcule sha256 sur bytes PDF, store storage, patche `documents.pdfStorageKey` + `documents.sha256`
+- [x] Horodatage qualifié (`qualifiedTimestamp`) : stub `new Date().toISOString()` documenté, helper extrait pour brancher TSA RFC 3161 plus tard (décision § 11.4)
+- [x] Code de vérification court (`verificationCode`) : généré format `GC-XX-NNNN` avec boucle anti-collision (index by_verification_code)
+- [x] Notifications insérées en table à chaque transition critique (assignment, piece_requested, document_ready, signature_requested, request_status_change) — envoi réel = autre Bloc
 
 ### Front
-- [ ] Page demande : boutons valider/rejeter pièce avec viewer (PDF embed ou image)
-- [ ] Page demande : OCR confidence affichée à côté de la pièce
-- [ ] Page demande : picker d'assignation (autocomplete sur agents organisme)
-- [ ] Page demande : circuit de signature visualisé (qui doit signer, où on en est)
-- [ ] Page `/signatures` : "Mes signatures en attente" avec approve/reject + commentaire
-- [ ] Page `/generation/[ref]` : vraie génération PDF (preview + signer & émettre)
-- [ ] Bouton "Verser au SAE" sur une demande `issued`
-- [ ] Notification temps-réel sur statut (toast + badge sidebar)
+- [x] Page demande : viewer modal (iframe PDF / img) + boutons valider/rejeter par pièce (Dialog motif)
+- [x] Page demande : badge OCR confidence si présent (champ ocrConfidence conditionnel — stub v1)
+- [x] Page demande : picker d'assignation (M'assigner + select des agents)
+- [x] Page demande : circuit de signature visualisé (steps ordonnés, statut visuel, boutons approuver/refuser pour l'assignee current)
+- [x] Page demande : panel vérifications interactif (boutons OK/KO/N-A + source)
+- [x] Page demande : bouton "Préparer l'acte" + dialog choix chef+officier si pas de template
+- [x] Page demande : bloc "Acte émis" avec sha256 court + statut PDF
+- [x] Page `/signatures` : tabs URL-driven (À approuver / Décisions récentes), carte par signature, approve/refuse avec commentaire, badge sidebar
+- [x] Page `/generation/[ref]` : barre d'actions contextuelle (sign direct vs aller à la demande vs télécharger PDF émis)
+- [x] Citoyen `/mon-espace/demarches/[ref]` : bouton "Télécharger l'acte" avec 3-états + bandeau "Vérifier l'authenticité" + code de vérification
+- [ ] Bouton "Verser au SAE" sur une demande `issued` — déjà câblé par `signAndIssue` (auto, Bloc 6 enrichira)
+- [x] Notification temps-réel sur statut : badge sidebar `signaturesPending` (revalidation à chaque mutation)
 
 ### Validation
-- [ ] Un agent reçoit, valide les pièces, génère le PDF, signe via circuit, livre — tout cliquable
-- [ ] Le citoyen voit la demande passer de `submitted` à `issued` avec PDF téléchargeable
-- [ ] Le document a un sha256 réel calculé sur le PDF émis
+- [x] Backend : 151/151 tests verts (23 nouveaux tests `bloc3.test.ts` + couverture mutations refondues)
+- [x] Typecheck 5 packages : 0 erreur (backend, admin-web, citizen-web, platform-web, ui)
+- [x] RGAA passe programmatique : audit complet via skill `accessibility-rgaa` après étape 15, 9 findings dont 3 critiques tous résolus (hook `useModalA11y` partagé, zones live persistantes, skip link, taille des cibles tactiles, accord de genre)
+- [ ] Click-through manuel par un humain : un agent reçoit, valide pièces, prépare, circuit 3 étapes, livre — citoyen télécharge le PDF
+- [ ] Tests manuels NVDA/VoiceOver sur les 5 modales (audit programmatique = couverture partielle)
+- [ ] Vrai TSA RFC 3161 branché (stub v1, helper extrait)
+- [ ] OCR + détection type doc (champs schema prêts, intégration future)
 
-✅ **Bloc 3 clôturé** : [ ]
+✅ **Bloc 3 clôturé** : [x] (sous réserve click-through manuel + NVDA/VoiceOver manuel)
 
 ---
 
@@ -232,7 +248,7 @@
 |---|---|---|---|
 | 1. Cycle de vie service | ✅ backend + UI | 2026-05-24 | 2026-05-24 |
 | 2. Dépôt en profondeur | ✅ backend + UI (validation manuelle à faire) | 2026-05-25 | 2026-05-25 |
-| 3. Traitement demande | 🟡 partiel | — | — |
+| 3. Traitement demande | ✅ backend + UI (validation manuelle à faire) | 2026-05-26 | 2026-05-26 |
 | 4. Document vérifiable | 🔴 | — | — |
 | 5. Correspondance | 🔴 | — | — |
 | 6. Archivage SAE | 🔴 | — | — |
