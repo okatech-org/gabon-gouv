@@ -1,659 +1,642 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
-import {
-  Avatar,
-  Badge,
-  Button,
-  Icon,
-  PageHeader,
-  TextArea,
-  TextInput,
-} from "@workspace/ui"
+import { Badge, Button, Icon, PageHeader } from "@workspace/ui"
 import { api } from "@workspace/backend/generated"
 import { convex } from "@/lib/convex"
 import { getCurrentAgent } from "@/lib/current-agent"
-import {
-  relativeTime,
-  shortDateTime,
-} from "@/lib/format"
+import { ThreadView, type ThreadData } from "./thread-view"
 
-interface InboxItem {
+/**
+ * Page principale /correspondance (Bloc 5 — refonte).
+ *
+ * Layout 3 colonnes URL-driven :
+ *   - Colonne 1 : liste des corres (Reçus/Envoyés/Brouillons/Archivés via ?tab)
+ *     avec scopes sur Reçus (?scope=untreated|noreply|all)
+ *   - Colonne 2 : thread complet de la corres sélectionnée (?ref=CR-XXX)
+ *     OU placeholder « sélectionnez un courrier »
+ *   - Colonne 3 : panneau meta (destinataires, dossiers liés, circuit)
+ *
+ * Si aucune corres dans la liste : empty state + CTA « Nouveau courrier ».
+ */
+
+interface ListItem {
   ref: string
-  from: string
   subject: string
-  sentAt: number
+  kind?: string
+  status: string
   urgent: boolean
   confidentiality: string
+  sentAt?: number
+  dueAckAt?: number
+  side: string
+  from: string
+  attachmentsCount: number
   unread: boolean
-  attachmentCount: number
 }
 
-interface ThreadMessage {
-  fromAgentName: string
-  fromOrganism: string
-  body: string
-  signed: boolean
-  sentAt: number
+type Tab = "inbox" | "outbox" | "drafts" | "archived"
+type InboxScope = "untreated" | "noreply" | "all"
+
+interface PageProps {
+  searchParams: Promise<{
+    tab?: string
+    scope?: string
+    ref?: string
+    search?: string
+  }>
 }
 
-interface ThreadData {
-  ref: string
-  subject: string
-  sentAt: number
-  dueAt?: number
-  urgent: boolean
-  confidentiality: string
-  archivePolicy: string
-  from: string
-  to: string
-  messages: ThreadMessage[]
-  linkedCitizen?: { name: string; nip: string } | null
-  linkedRequest?: { ref: string; status: string } | null
-}
-
-function confidentialityLabel(c: string): string {
-  switch (c) {
-    case "restricted":
-      return "Restreint"
-    case "confidential":
-      return "Confidentiel"
-    case "public":
-      return "Public"
-    default:
-      return c
-  }
-}
-
-function archiveLabel(p: string): string {
-  switch (p) {
-    case "2y":
-      return "2 ans"
-    case "5y":
-      return "5 ans"
-    case "10y":
-      return "10 ans"
-    case "indef":
-      return "Indéfini"
-    default:
-      return p
-  }
-}
-
-export default async function AdminCorrespondencePage() {
+export default async function CorrespondancePage({
+  searchParams,
+}: PageProps) {
   const session = await getCurrentAgent()
   if (!session) redirect("/login")
+  const sp = await searchParams
 
-  const inbox = (await convex.query(api.admin.correspondence.listInbox, {
-    token: session.token,
-  })) as InboxItem[]
+  const tab: Tab =
+    sp.tab === "outbox" || sp.tab === "drafts" || sp.tab === "archived"
+      ? sp.tab
+      : "inbox"
+  const scope: InboxScope =
+    sp.scope === "untreated" || sp.scope === "noreply" ? sp.scope : "all"
+  const selectedRef = sp.ref
+  const search = sp.search?.trim() || undefined
 
-  // Conversation par défaut affichée : la première (ou CR-2026-1842 si présente).
-  const activeRef =
-    inbox.find((i) => i.ref === "CR-2026-1842")?.ref ?? inbox[0]?.ref ?? "CR-2026-1842"
+  // Charge la liste selon le tab
+  const list = (await loadList(session.token, tab, scope, search)) as ListItem[]
+  const counts = (await convex.query(
+    api.admin.correspondenceQueries.getInboxCounts,
+    { token: session.token },
+  )) as { unread: number; untreated: number; urgent: number }
 
-  const thread = (await convex.query(api.admin.correspondence.getThread, {
-    token: session.token,
-    ref: activeRef,
-  })) as ThreadData | null
-
-  const unreadCount = inbox.filter((i) => i.unread).length
+  // Charge le thread sélectionné (si ref valide).
+  // Pour récupérer l'Id Convex (nécessaire aux server actions), on requête
+  // directement la table correspondances via une query dédiée.
+  let thread: ThreadData | null = null
+  let correspondenceId = ""
+  if (selectedRef) {
+    const raw = (await convex
+      .query(api.admin.correspondenceQueries.getThreadV2, {
+        token: session.token,
+        ref: selectedRef,
+      })
+      .catch(() => null)) as ThreadData | null
+    if (raw) {
+      thread = raw
+      // L'Id n'est pas exposé dans le shape — on le récupère via getId.
+      // Phase D : ajouter `id` au shape de getThreadV2 pour économiser cet appel.
+      const idLookup = await convex
+        .query(api.admin.correspondenceQueries.searchCorrespondences, {
+          token: session.token,
+          query: selectedRef,
+          limit: 1,
+        })
+        .catch(() => [] as Array<{ ref: string }>)
+      void idLookup
+      // À défaut, on lit la corres directement via la query getThreadByThreadId
+      // qui renvoie aussi des metadata. Pour Phase C v1, on accepte de ne pas
+      // pouvoir actioner depuis cette page (l'utilisateur cliquera sur l'URL
+      // deep-link `/correspondance/[ref]` pour les actions).
+      correspondenceId = "" // hack temporaire
+    }
+  }
 
   return (
     <>
       <PageHeader
-        breadcrumbs={["Correspondance inter-administrations"]}
-        title="Messagerie sécurisée inter-admin"
-        subtitle={`Échanges officiels entre ${session.agent.organism?.shortName ?? "votre organisme"} et les autres administrations gabonaises.`}
+        breadcrumbs={["Correspondance"]}
+        title="Correspondance inter-administrations"
+        subtitle="Échanges officiels avec les autres organismes, citoyens et partenaires."
         actions={
-          <>
-            <Button variant="outline" icon="filter">
-              Filtres
-            </Button>
+          <Link href="/correspondance/nouveau" style={{ textDecoration: "none" }}>
             <Button icon="plus">Nouveau courrier</Button>
-          </>
+          </Link>
         }
       />
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "300px 1fr 360px",
+          gridTemplateColumns: "320px 1fr 320px",
           flex: 1,
           minHeight: 0,
           overflow: "hidden",
         }}
       >
-        {/* List */}
-        <div style={{ borderRight: "1px solid var(--ink-200)", overflow: "auto" }}>
-          <div style={{ padding: 14, borderBottom: "1px solid var(--ink-150)" }}>
-            <TextInput placeholder="Rechercher…" icon="search" />
-          </div>
-          <div
-            style={{
-              display: "flex",
-              gap: 4,
-              padding: "10px 14px",
-              borderBottom: "1px solid var(--ink-150)",
-            }}
-          >
-            {[`Reçus (${inbox.length})`, "Envoyés", "Brouillons"].map((t, i) => (
-              <button
-                key={t}
-                style={{
-                  padding: "4px 10px",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  background: i === 0 ? "var(--primary-50)" : "transparent",
-                  color: i === 0 ? "var(--primary-700)" : "var(--ink-600)",
-                  border: "none",
-                  borderRadius: 4,
-                  cursor: "pointer",
-                }}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-          {inbox.map((m) => {
-            const isActive = m.ref === activeRef
-            return (
-              <div
-                key={m.ref}
-                style={{
-                  padding: "12px 14px",
-                  borderBottom: "1px solid var(--ink-150)",
-                  background: isActive
-                    ? "var(--primary-50)"
-                    : m.unread
-                      ? "white"
-                      : "var(--ink-50)",
-                  cursor: "pointer",
-                  display: "flex",
-                  gap: 10,
-                }}
-              >
-                <span
-                  style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: "50%",
-                    background: m.unread ? "var(--primary-500)" : "transparent",
-                    marginTop: 8,
-                    flexShrink: 0,
-                  }}
-                />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: 13,
-                        fontWeight: m.unread ? 700 : 600,
-                        color: "var(--ink-900)",
-                      }}
-                    >
-                      {m.from}
-                    </span>
-                    <span style={{ fontSize: 11, color: "var(--ink-500)" }}>
-                      {relativeTime(m.sentAt)}
-                    </span>
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 13,
-                      color: "var(--ink-800)",
-                      marginTop: 2,
-                      whiteSpace: "nowrap",
-                      textOverflow: "ellipsis",
-                      overflow: "hidden",
-                    }}
-                  >
-                    {m.subject}
-                  </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      marginTop: 4,
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontFamily: "var(--font-mono)",
-                        fontSize: 10.5,
-                        color: "var(--ink-500)",
-                      }}
-                    >
-                      {m.ref}
-                    </span>
-                    {m.urgent && (
-                      <Badge tone="danger" size="sm">
-                        Urgent
-                      </Badge>
-                    )}
-                    {m.attachmentCount > 0 && (
-                      <span style={{ fontSize: 11, color: "var(--ink-600)" }}>
-                        <Icon
-                          name="paperclip"
-                          size={11}
-                          style={{ verticalAlign: "middle" }}
-                        />{" "}
-                        {m.attachmentCount}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )
-          })}
-        </div>
+        {/* Colonne 1 — Liste */}
+        <aside
+          style={{
+            borderRight: "1px solid var(--ink-200)",
+            display: "flex",
+            flexDirection: "column",
+            background: "white",
+            overflow: "hidden",
+          }}
+          aria-label="Liste des correspondances"
+        >
+          <TabsBar tab={tab} counts={counts} />
+          {tab === "inbox" && <InboxScopeBar scope={scope} />}
+          <ListItems items={list} selectedRef={selectedRef} tab={tab} scope={scope} />
+        </aside>
 
-        {/* Conversation */}
-        <div
+        {/* Colonne 2 — Thread */}
+        <main
           style={{
             display: "flex",
             flexDirection: "column",
+            background: "white",
             overflow: "hidden",
           }}
+          id="main"
+          tabIndex={-1}
         >
-          <div
-            style={{
-              padding: "14px 24px",
-              borderBottom: "1px solid var(--ink-200)",
-              background: "white",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <div>
-                <h2 style={{ fontSize: 17 }}>
-                  {thread?.subject ?? "Aucun courrier sélectionné"}
-                </h2>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    marginTop: 4,
-                    fontSize: 12.5,
-                    color: "var(--ink-600)",
-                  }}
-                >
-                  {thread && (
-                    <>
-                      <span style={{ fontFamily: "var(--font-mono)" }}>
-                        {thread.ref}
-                      </span>
-                      {thread.urgent && (
-                        <Badge tone="danger" size="sm">
-                          Urgent
-                          {thread.dueAt
-                            ? ` · ${relativeTime(thread.dueAt)}`
-                            : ""}
-                        </Badge>
-                      )}
-                      <span>{thread.messages.length} message{thread.messages.length > 1 ? "s" : ""}</span>
-                    </>
-                  )}
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 6 }}>
-                <Button variant="ghost" size="sm" icon="archive">
-                  {""}
-                </Button>
-                <Button variant="ghost" size="sm" icon="share">
-                  {""}
-                </Button>
-                <Button variant="ghost" size="sm" icon="moreH">
-                  {""}
-                </Button>
-              </div>
-            </div>
-          </div>
+          {thread ? (
+            <ThreadView thread={thread} correspondenceId={correspondenceId} />
+          ) : (
+            <EmptyState hasItems={list.length > 0} />
+          )}
+        </main>
 
-          <div
-            style={{
-              flex: 1,
-              overflow: "auto",
-              padding: "20px 24px",
-              background: "var(--ink-50)",
-            }}
-          >
-            {thread?.messages.map((msg, i) => (
-              <div
-                key={`${msg.sentAt}-${i}`}
-                style={{
-                  background: "white",
-                  border: "1px solid var(--ink-200)",
-                  borderRadius: 8,
-                  padding: 18,
-                  marginBottom: 14,
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    marginBottom: 10,
-                  }}
-                >
-                  <Avatar name={msg.fromOrganism} tone="primary" size={32} />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700 }}>
-                      {msg.fromOrganism} · {msg.fromAgentName}
-                    </div>
-                    <div style={{ fontSize: 11.5, color: "var(--ink-600)" }}>
-                      Pour : {thread.to} · {shortDateTime(msg.sentAt)}
-                    </div>
-                  </div>
-                  {msg.signed && (
-                    <Badge tone="archived" size="sm" icon="shieldCheck">
-                      Signé S/MIME
-                    </Badge>
-                  )}
-                </div>
-                <div
-                  style={{
-                    fontSize: 14,
-                    color: "var(--ink-800)",
-                    lineHeight: 1.65,
-                    whiteSpace: "pre-wrap",
-                  }}
-                >
-                  {msg.body}
-                </div>
-              </div>
-            ))}
-
-            {thread && (
-              <div
-                style={{
-                  background: "var(--info-50)",
-                  border: "1px dashed var(--primary-300)",
-                  borderRadius: 8,
-                  padding: 14,
-                  marginBottom: 14,
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <Icon name="cpu" size={14} style={{ color: "var(--primary-500)" }} />
-                  <span
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: "var(--primary-700)",
-                    }}
-                  >
-                    Réponse suggérée par Gabon Connect
-                  </span>
-                </div>
-                <p
-                  style={{
-                    fontSize: 13,
-                    color: "var(--ink-700)",
-                    marginTop: 8,
-                    lineHeight: 1.55,
-                  }}
-                >
-                  L&apos;acte référencé dans votre demande est conforme au registre.
-                  Nous confirmons l&apos;authenticité du document. Aucune mention
-                  marginale n&apos;a été constatée à ce jour.
-                </p>
-                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                  <Button size="sm" icon="check">
-                    Utiliser cette réponse
-                  </Button>
-                  <Button variant="ghost" size="sm">
-                    Éditer
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Composer */}
-          <div
-            style={{
-              padding: 16,
-              borderTop: "1px solid var(--ink-200)",
-              background: "white",
-            }}
-          >
-            <TextArea
-              placeholder="Rédiger une réponse…"
-              defaultValue=""
-              style={{ minHeight: 76, fontSize: 13.5 }}
-            />
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                marginTop: 10,
-              }}
-            >
-              <Button variant="ghost" size="sm" icon="paperclip">
-                Joindre
-              </Button>
-              <Button variant="ghost" size="sm" icon="shieldCheck">
-                Signer S/MIME
-              </Button>
-              <div style={{ flex: 1 }} />
-              <Button variant="secondary" size="sm" icon="save">
-                Brouillon
-              </Button>
-              <Button size="sm" iconRight="arrowRight">
-                Envoyer
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        {/* Right pane */}
+        {/* Colonne 3 — Meta */}
         <aside
           style={{
             borderLeft: "1px solid var(--ink-200)",
+            padding: 16,
+            background: "var(--ink-50)",
             overflow: "auto",
-            padding: 20,
           }}
+          aria-label="Métadonnées de la correspondance"
         >
-          <div
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              color: "var(--ink-500)",
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-              marginBottom: 10,
-            }}
-          >
-            Circuit de validation
-          </div>
-          {/* TODO: placeholder — pas encore de query Convex pour le circuit de validation. */}
-          {[
-            { who: "Y. NGUEMA", role: "Agent instructeur", st: "done" as const },
-            { who: "C. NDONG", role: "Chef de service", st: "active" as const },
-            {
-              who: "P. MOUSSAVOU",
-              role: "Officier signataire",
-              st: "pending" as const,
-            },
-          ].map((s, i, arr) => (
-            <div key={s.who} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                }}
-              >
-                <span
-                  style={{
-                    width: 24,
-                    height: 24,
-                    borderRadius: "50%",
-                    background:
-                      s.st === "done"
-                        ? "var(--success-500)"
-                        : s.st === "active"
-                          ? "var(--primary-500)"
-                          : "white",
-                    border: `1.5px solid ${
-                      s.st === "done"
-                        ? "var(--success-500)"
-                        : s.st === "active"
-                          ? "var(--primary-500)"
-                          : "var(--ink-300)"
-                    }`,
-                    color: s.st === "pending" ? "var(--ink-500)" : "white",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 11,
-                    fontWeight: 700,
-                  }}
-                >
-                  {s.st === "done" ? <Icon name="check" size={11} stroke={3} /> : i + 1}
-                </span>
-                {i < arr.length - 1 && (
-                  <span
-                    style={{
-                      width: 1.5,
-                      flex: 1,
-                      minHeight: 24,
-                      background:
-                        s.st === "pending" ? "var(--ink-200)" : "var(--ink-300)",
-                    }}
-                  />
-                )}
-              </div>
-              <div style={{ flex: 1, paddingBottom: 12 }}>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{s.who}</div>
-                <div style={{ fontSize: 12, color: "var(--ink-600)" }}>{s.role}</div>
-              </div>
-            </div>
-          ))}
-          <div
-            style={{
-              height: 1,
-              background: "var(--ink-150)",
-              margin: "6px 0 14px",
-            }}
-          />
-          {thread?.linkedCitizen && (
-            <>
-              <div
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: "var(--ink-500)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.06em",
-                  marginBottom: 10,
-                }}
-              >
-                Dossier rattaché
-              </div>
-              <Link
-                href={`/dossiers/${thread.linkedCitizen.nip.replace(/\s/g, "")}`}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: 10,
-                  background: "var(--ink-50)",
-                  borderRadius: 6,
-                  textDecoration: "none",
-                  color: "inherit",
-                }}
-              >
-                <Icon name="folder" size={16} style={{ color: "var(--ink-500)" }} />
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>
-                    {thread.linkedCitizen.name}
-                  </div>
-                  <div style={{ fontSize: 11, color: "var(--ink-600)" }}>
-                    NIP{" "}
-                    <span style={{ fontFamily: "var(--font-mono)" }}>
-                      {thread.linkedCitizen.nip}
-                    </span>
-                  </div>
-                </div>
-              </Link>
-              <div style={{ height: 14 }} />
-            </>
-          )}
-          {thread && (
-            <>
-              <div
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: "var(--ink-500)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.06em",
-                  marginBottom: 10,
-                }}
-              >
-                Métadonnées
-              </div>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "8px 12px",
-                  fontSize: 12,
-                }}
-              >
-                <span style={{ color: "var(--ink-500)" }}>Référence</span>
-                <span
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontWeight: 600,
-                  }}
-                >
-                  {thread.ref}
-                </span>
-                <span style={{ color: "var(--ink-500)" }}>Confidentialité</span>
-                <Badge tone="warning" size="sm">
-                  {confidentialityLabel(thread.confidentiality)}
-                </Badge>
-                <span style={{ color: "var(--ink-500)" }}>Échéance</span>
-                <span style={{ fontWeight: 600 }}>
-                  {thread.dueAt ? shortDateTime(thread.dueAt) : "—"}
-                </span>
-                <span style={{ color: "var(--ink-500)" }}>Archivage</span>
-                <Badge tone="active" size="sm" dot>
-                  {archiveLabel(thread.archivePolicy)}
-                </Badge>
-              </div>
-            </>
-          )}
-          {!thread && (
-            <div style={{ fontSize: 12, color: "var(--ink-500)" }}>
-              Sélectionnez un courrier pour voir ses métadonnées.
-            </div>
-          )}
-          <div style={{ height: 10 }} />
-          {unreadCount > 0 && (
-            <div style={{ fontSize: 11, color: "var(--ink-500)" }}>
-              {unreadCount} courrier{unreadCount > 1 ? "s" : ""} non lu
-              {unreadCount > 1 ? "s" : ""}.
-            </div>
-          )}
+          {thread ? <MetaPanel thread={thread} /> : <MetaEmpty />}
         </aside>
       </div>
     </>
   )
+}
+
+/* ============================================================
+   Sub-composants UI
+   ============================================================ */
+
+function TabsBar({
+  tab,
+  counts,
+}: {
+  tab: Tab
+  counts: { unread: number; untreated: number; urgent: number }
+}) {
+  const tabs: { id: Tab; label: string; badge?: number }[] = [
+    { id: "inbox", label: "Reçus", badge: counts.unread },
+    { id: "outbox", label: "Envoyés" },
+    { id: "drafts", label: "Brouillons" },
+    { id: "archived", label: "Archives" },
+  ]
+  return (
+    <nav
+      aria-label="Sélection de la boîte"
+      style={{
+        display: "flex",
+        gap: 2,
+        padding: 10,
+        borderBottom: "1px solid var(--ink-200)",
+      }}
+    >
+      {tabs.map((t) => {
+        const active = t.id === tab
+        return (
+          <Link
+            key={t.id}
+            href={`/correspondance?tab=${t.id}`}
+            aria-current={active ? "page" : undefined}
+            style={{
+              padding: "6px 10px",
+              fontSize: 12,
+              fontWeight: active ? 700 : 500,
+              color: active ? "var(--primary-700)" : "var(--ink-700)",
+              background: active ? "var(--primary-50)" : "transparent",
+              borderRadius: 4,
+              textDecoration: "none",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+            }}
+          >
+            {t.label}
+            {typeof t.badge === "number" && t.badge > 0 && (
+              <Badge tone="primary" size="sm">
+                {t.badge}
+              </Badge>
+            )}
+          </Link>
+        )
+      })}
+    </nav>
+  )
+}
+
+function InboxScopeBar({ scope }: { scope: InboxScope }) {
+  const scopes: { id: InboxScope; label: string }[] = [
+    { id: "untreated", label: "À traiter" },
+    { id: "noreply", label: "Sans réponse" },
+    { id: "all", label: "Tous" },
+  ]
+  return (
+    <div
+      role="tablist"
+      aria-label="Filtre des reçus"
+      style={{
+        display: "flex",
+        gap: 4,
+        padding: "6px 10px",
+        borderBottom: "1px solid var(--ink-150)",
+        fontSize: 11,
+      }}
+    >
+      {scopes.map((s) => {
+        const active = s.id === scope
+        return (
+          <Link
+            key={s.id}
+            href={`/correspondance?tab=inbox&scope=${s.id}`}
+            role="tab"
+            aria-selected={active}
+            style={{
+              padding: "4px 8px",
+              borderRadius: 4,
+              textDecoration: "none",
+              color: active ? "var(--primary-700)" : "var(--ink-600)",
+              background: active ? "var(--primary-50)" : "transparent",
+              fontWeight: active ? 700 : 500,
+            }}
+          >
+            {s.label}
+          </Link>
+        )
+      })}
+    </div>
+  )
+}
+
+function ListItems({
+  items,
+  selectedRef,
+  tab,
+  scope,
+}: {
+  items: ListItem[]
+  selectedRef?: string
+  tab: Tab
+  scope: InboxScope
+}) {
+  if (items.length === 0) {
+    return (
+      <div
+        style={{
+          padding: 24,
+          textAlign: "center",
+          fontSize: 13,
+          color: "var(--ink-500)",
+        }}
+      >
+        Aucune correspondance dans cette vue.
+      </div>
+    )
+  }
+  return (
+    <ul
+      style={{
+        listStyle: "none",
+        padding: 0,
+        margin: 0,
+        overflow: "auto",
+        flex: 1,
+      }}
+      aria-label="Liste des correspondances"
+    >
+      {items.map((it) => {
+        const selected = it.ref === selectedRef
+        const baseQuery = `tab=${tab}${tab === "inbox" ? `&scope=${scope}` : ""}`
+        return (
+          <li key={it.ref}>
+            <Link
+              href={`/correspondance?${baseQuery}&ref=${it.ref}`}
+              aria-current={selected ? "page" : undefined}
+              style={{
+                display: "flex",
+                gap: 10,
+                padding: 12,
+                borderBottom: "1px solid var(--ink-150)",
+                background: selected
+                  ? "var(--primary-50)"
+                  : it.unread
+                    ? "white"
+                    : "var(--ink-50)",
+                textDecoration: "none",
+                color: "inherit",
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: "50%",
+                  background: it.unread ? "var(--primary-500)" : "transparent",
+                  marginTop: 8,
+                  flexShrink: 0,
+                }}
+              />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    fontSize: 12.5,
+                    fontWeight: it.unread ? 700 : 600,
+                  }}
+                >
+                  <span
+                    style={{
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {it.from}
+                  </span>
+                  <span style={{ fontSize: 10.5, color: "var(--ink-500)" }}>
+                    {formatRelative(it.sentAt)}
+                  </span>
+                </div>
+                <div
+                  style={{
+                    fontSize: 12.5,
+                    marginTop: 2,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {it.subject}
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 4,
+                    marginTop: 4,
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 10,
+                      color: "var(--ink-500)",
+                    }}
+                  >
+                    {it.ref}
+                  </span>
+                  {it.urgent && (
+                    <Badge tone="danger" size="sm">
+                      Urgent
+                    </Badge>
+                  )}
+                  {it.attachmentsCount > 0 && (
+                    <span
+                      style={{ fontSize: 10.5, color: "var(--ink-600)" }}
+                      aria-label={`${it.attachmentsCount} pièces jointes`}
+                    >
+                      <Icon name="paperclip" size={10} aria-hidden="true" />{" "}
+                      {it.attachmentsCount}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </Link>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+function EmptyState({ hasItems }: { hasItems: boolean }) {
+  return (
+    <div
+      style={{
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 12,
+        color: "var(--ink-500)",
+        padding: 32,
+      }}
+    >
+      <Icon name="mail" size={40} aria-hidden="true" />
+      <p style={{ fontSize: 14, margin: 0 }}>
+        {hasItems
+          ? "Sélectionnez une correspondance pour voir le détail."
+          : "Aucune correspondance ici."}
+      </p>
+      <Link href="/correspondance/nouveau" style={{ textDecoration: "none" }}>
+        <Button icon="plus" variant="primary" size="sm">
+          Nouveau courrier
+        </Button>
+      </Link>
+    </div>
+  )
+}
+
+function MetaEmpty() {
+  return (
+    <div style={{ fontSize: 12, color: "var(--ink-500)" }}>
+      Aucun courrier sélectionné.
+    </div>
+  )
+}
+
+function MetaPanel({ thread }: { thread: ThreadData }) {
+  return (
+    <>
+      {/* Destinataires */}
+      <section aria-labelledby="meta-recipients-heading">
+        <h3 id="meta-recipients-heading" style={metaSectionTitle}>
+          Destinataires
+        </h3>
+        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+          {thread.recipients.map((r) => (
+            <li
+              key={r.id}
+              style={{
+                fontSize: 12.5,
+                padding: "4px 0",
+                display: "flex",
+                gap: 6,
+              }}
+            >
+              <Badge tone="neutral" size="sm">
+                {r.role.toUpperCase()}
+              </Badge>
+              <span>{r.name}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      {/* Circuit signature */}
+      {thread.circuit && (
+        <section
+          aria-labelledby="meta-circuit-heading"
+          style={{ marginTop: 16 }}
+        >
+          <h3 id="meta-circuit-heading" style={metaSectionTitle}>
+            Circuit de signature
+          </h3>
+          <ol style={{ listStyle: "none", padding: 0, margin: 0 }}>
+            {thread.circuit.steps.map((s, i) => (
+              <li
+                key={i}
+                style={{
+                  fontSize: 12,
+                  display: "flex",
+                  gap: 8,
+                  alignItems: "center",
+                  padding: "4px 0",
+                }}
+              >
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 18,
+                    height: 18,
+                    borderRadius: "50%",
+                    background:
+                      s.status === "done"
+                        ? "var(--success-500)"
+                        : s.status === "active"
+                          ? "var(--primary-500)"
+                          : "var(--ink-300)",
+                    color: "white",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {s.order + 1}
+                </span>
+                <span style={{ flex: 1 }}>{s.assigneeName}</span>
+                <span style={{ color: "var(--ink-500)" }}>{s.status}</span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
+
+      {/* Métadonnées techniques */}
+      <section style={{ marginTop: 16 }} aria-labelledby="meta-tech-heading">
+        <h3 id="meta-tech-heading" style={metaSectionTitle}>
+          Métadonnées
+        </h3>
+        <dl
+          style={{
+            display: "grid",
+            gridTemplateColumns: "auto 1fr",
+            gap: "4px 12px",
+            fontSize: 11.5,
+            margin: 0,
+          }}
+        >
+          <dt style={{ color: "var(--ink-500)" }}>Référence</dt>
+          <dd
+            style={{
+              margin: 0,
+              fontFamily: "var(--font-mono)",
+              fontWeight: 600,
+            }}
+          >
+            {thread.ref}
+          </dd>
+          {thread.kind && (
+            <>
+              <dt style={{ color: "var(--ink-500)" }}>Type</dt>
+              <dd style={{ margin: 0 }}>{thread.kind}</dd>
+            </>
+          )}
+          {thread.dueAckAt && (
+            <>
+              <dt style={{ color: "var(--ink-500)" }}>Échéance AR</dt>
+              <dd style={{ margin: 0 }}>
+                {new Date(thread.dueAckAt).toLocaleDateString("fr-FR")}
+              </dd>
+            </>
+          )}
+          {thread.duaCode && (
+            <>
+              <dt style={{ color: "var(--ink-500)" }}>Archivage</dt>
+              <dd style={{ margin: 0 }}>{thread.duaCode}</dd>
+            </>
+          )}
+        </dl>
+      </section>
+    </>
+  )
+}
+
+/* ============================================================
+   Helpers
+   ============================================================ */
+
+async function loadList(
+  token: string,
+  tab: Tab,
+  scope: InboxScope,
+  search: string | undefined,
+): Promise<ListItem[]> {
+  if (tab === "outbox") {
+    return (await convex.query(api.admin.correspondenceQueries.listOutbox, {
+      token,
+      search,
+    })) as ListItem[]
+  }
+  if (tab === "drafts") {
+    return (await convex.query(api.admin.correspondenceQueries.listDrafts, {
+      token,
+    })) as ListItem[]
+  }
+  if (tab === "archived") {
+    return (await convex.query(api.admin.correspondenceQueries.listArchived, {
+      token,
+      search,
+    })) as ListItem[]
+  }
+  return (await convex.query(api.admin.correspondenceQueries.listInboxV2, {
+    token,
+    scope,
+    search,
+  })) as ListItem[]
+}
+
+function formatRelative(ms?: number): string {
+  if (!ms) return "—"
+  const diff = Date.now() - ms
+  if (diff < 60_000) return "à l'instant"
+  if (diff < 3_600_000) return `il y a ${Math.round(diff / 60_000)} min`
+  if (diff < 86_400_000) return `il y a ${Math.round(diff / 3_600_000)} h`
+  return new Date(ms).toLocaleDateString("fr-FR", {
+    day: "numeric",
+    month: "short",
+  })
+}
+
+const metaSectionTitle: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 700,
+  color: "var(--ink-500)",
+  textTransform: "uppercase",
+  letterSpacing: "0.06em",
+  margin: "0 0 6px",
 }
