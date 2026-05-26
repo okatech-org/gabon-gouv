@@ -129,6 +129,13 @@ export type Action =
   | "platform.read_supervision"
   | "platform.acknowledge_alert"
   | "platform.generate_report"
+  // Gestion d'équipe intra-organisme (Phase Trous B)
+  | "team.read"
+  | "team.invite"
+  | "team.revoke_invitation"
+  | "team.disable_agent"
+  | "team.enable_agent"
+  | "team.change_role"
 
 // ============================================================
 // Règle pure (role-based) — toutes les actions qui peuvent se
@@ -210,6 +217,7 @@ const AGENT_ANY_ROLE = new Set<Action>([
   "archive.read",
   "service.read",
   "service.read_stats",
+  "team.read",
 ])
 
 const AGENT_INSTRUCTEUR_ALLOWED = new Set<Action>([
@@ -294,6 +302,12 @@ const ADMIN_ORGANISME_ALLOWED = new Set<Action>([
   "dossier.grant_access",
   "dossier.revoke_access",
   "convention.sign.organism",
+  // Phase Trous B — Gestion d'équipe (admin_organisme exclusif)
+  "team.invite",
+  "team.revoke_invitation",
+  "team.disable_agent",
+  "team.enable_agent",
+  "team.change_role",
   // Legacy
   "service.draft",
   "service.edit",

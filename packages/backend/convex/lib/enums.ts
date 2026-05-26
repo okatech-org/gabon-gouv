@@ -761,6 +761,12 @@ export const AUDIT_VERBS = [
   "agent.role_change",
   "auth.login",
   "auth.logout",
+  // Phase Trous B — gestion d'équipe
+  "agent.invite",
+  "agent.invite_revoke",
+  "agent.invite_accept",
+  "agent.disable",
+  "agent.enable",
 ] as const
 export type AuditVerb = (typeof AUDIT_VERBS)[number]
 export const auditVerbValidator = literals(...AUDIT_VERBS)

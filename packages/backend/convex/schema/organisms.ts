@@ -98,6 +98,40 @@ export const organismsTables = {
     .index("by_organism_role", ["organismId", "role"]),
 
   // ───────────────────────────────────────────────────────────
+  // Phase Trous B — Invitations d'agents (token magique 14j)
+  // ───────────────────────────────────────────────────────────
+  //
+  // Flow :
+  //   1. admin_organisme appelle inviteAgent → crée une entrée pending
+  //      avec un token aléatoire (32 bytes hex) et expiresAt = now + 14j.
+  //   2. Le lien `/enrolement/{token}` est envoyé (manuel ou via notif
+  //      provider Phase 2). Token unique, jamais réutilisable.
+  //   3. L'invité ouvre le lien, saisit son NIP + nom + fonction, appelle
+  //      `acceptInvitation` → crée l'agent et patche acceptedAt.
+  //   4. Si admin révoque avant : revokedAt → la mutation accept refuse.
+  agentInvitations: defineTable({
+    organismId: v.id("organisms"),
+    email: v.string(),
+    role: agentRoleValidator,
+    functionTitle: v.optional(v.string()),
+    authMethod: v.optional(authMethodValidator),
+    token: v.string(), // secret, 64 chars hex
+    expiresAt: v.number(),
+    createdAt: v.number(),
+    createdByAgentId: v.id("agents"),
+    // Vie : exactement un parmi { acceptedAt, revokedAt } est défini, ou aucun (pending)
+    acceptedAt: v.optional(v.number()),
+    acceptedByAgentId: v.optional(v.id("agents")), // pointer vers l'agent créé
+    revokedAt: v.optional(v.number()),
+    revokedByAgentId: v.optional(v.id("agents")),
+    // Optionnel : pour onboarding bootstrap (Phase C), on lie au process
+    onboardingProcessId: v.optional(v.id("onboardingProcesses")),
+  })
+    .index("by_token", ["token"])
+    .index("by_organism_pending", ["organismId", "acceptedAt", "revokedAt"])
+    .index("by_email_org", ["email", "organismId"]),
+
+  // ───────────────────────────────────────────────────────────
   // Onboarding d'un organisme (P3) — stepper 7 étapes
   // ───────────────────────────────────────────────────────────
   onboardingProcesses: defineTable({
