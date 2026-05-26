@@ -191,20 +191,44 @@
 
 **Entités** : `correspondences`, `correspondenceMessages`, `correspondenceReads`, `signatureCircuits` (S/MIME)
 
-### Backend
-- [ ] Mutation `sendCorrespondence` 🟢 (existe — câbler dialog)
-- [ ] Mutation `replyCorrespondence` 🟢 (existe — câbler thread)
-- [ ] Query `listOutbox` (à créer — courriers envoyés)
-- [ ] Query `getThread(ref)` 🟢 (existe — page détail à créer)
+> Spec préalable détaillée : [`correspondence-entity-spec.md`](./correspondence-entity-spec.md)
+> (1084 lignes, 15 décisions verrouillées, 5 phases A-E).
 
-### Front
-- [ ] Page `/correspondance/[ref]` : thread complet avec liaison demande/citoyen affichée
-- [ ] Tabs Boîte de réception / Envoyés / Brouillons sur `/correspondance`
-- [ ] Dialog "Nouveau courrier" : destinataire (picker org), sujet, corps, niveau confidentialité, urgent, pièces, **lien optionnel à une demande / un citoyen**
-- [ ] Composer de réponse dans la page détail
-- [ ] Indicateur S/MIME signed (icône cadenas + tooltip)
+### Backend (Phase A + B)
+- [x] Schema refonte exhaustive : émetteur polymorphe (organism|citizen|external|platform), kind enum 16 valeurs / 6 familles, DUA spécifique, threading cross-corres via threadId+parentCorrespondenceId, liens multi (linkedRequestIds, linkedCitizenIds, linkedDocumentIds, linkedCorrespondenceIds)
+- [x] 6 nouvelles tables : `correspondenceRecipients` (To/CC/BCC polymorphe), `correspondenceAcks` (AR formels distincts de reads passifs), `correspondenceAttachments` (refactor de l'array inline avec sha256 + lien optionnel acte), `externalParties` (notaires/ambassades/huissiers), `correspondenceTemplates` (modèles par kind), `correspondenceKindRules` (règles métier ajustables)
+- [x] Enums : confidentialité 4 niveaux (+ `secret`), statuts 8 valeurs (+ `acknowledged`, `recalled`, `pending_signature`), 16 kinds, 5 nouveaux notification kinds
+- [x] Permissions : 11 nouvelles actions admin + 4 actions citoyen, matrices mises à jour
+- [x] Helper `lib/smime.ts` (stub v1 SHA-256 + clé maître, interface réutilisable pour vraie PKI), algorithm `stub-sha256-v1`
+- [x] Helper `lib/correspondenceLifecycle.ts` : loadKindRule (table-first), getDefaultKindRules (17 entrées), duaCodeToMs, computeAck/Reply/DuaDeadline, performCorrespondenceSend (factorisé entre sendDirect et onCircuitCompleted), notifyRecipientsOnSend, generateCorrespondenceRef (anti-collision), newThreadId
+- [x] Module `admin/correspondenceLifecycle.ts` (14 mutations) : createDraft, updateDraft, deleteDraft (cascade), addRecipient/removeRecipient, attachFile/removeAttachment, submitForSignature (ouvre circuit Bloc 3 polymorphe), sendDirect, acknowledge (idempotent), reply, recall (admin only, refusé après AR), close, archiveCorrespondence, closeStaleAutomatic (cron), markRead
+- [x] Module `admin/correspondenceQueries.ts` (11 queries) : listInboxV2 (scopes untreated/noreply/all), listOutbox, listDrafts, listArchived, getThreadV2 (recipients To/CC, BCC filtré viewer-aware, messages avec author, attachments, acks, circuit signature, parent thread), getThreadByThreadId (corres cross-thread chrono), searchCorrespondences (sujet+body+ref), getInboxCounts (unread+untreated+urgent), listEscalations (platform_admin), getKindRules
+- [x] Module `citizen/correspondence.ts` : citizenListInbox, citizenGetThread (ownership strict), citizenListOrganisms (picker), citizenGetInboxCounts, citizenCreateCorrespondence (kinds restreints), citizenReply, citizenAcknowledge, performCitizenSend helper
+- [x] onCircuitCompleted (lib/signatureCircuit) branche pour subjectKind=correspondence → délègue à performCorrespondenceSend
+- [x] Seed enrichi : 17 correspondenceKindRules
+- [x] Tests : **227/227 verts** (+63 tests Bloc 5 : lifecycle, préconditions, permissions, recall, threading, multi-destinataires, AR idempotent, citoyen, smime, helpers)
 
-✅ **Bloc 5 clôturé** : [ ]
+### Front (Phase C + D)
+- [x] Page `/correspondance` refondue : layout 3 colonnes URL-driven (tabs Reçus/Envoyés/Brouillons/Archivés + sous-tabs scopes sur Reçus), liste avec badges urgent/PJ/unread, ThreadView au centre, MetaPanel à droite (destinataires To/CC/BCC, circuit signature steps, dossiers liés, métadonnées techniques)
+- [x] Composant `thread-view.tsx` (~770 lignes) : header avec actions contextuelles selon statut+rôle (Acknowledge/Submit/Send/Recall/Close/Archive), liste messages chronologique avec messages système, composer réponse signé S/MIME, dialogs avec hook useModalA11y partagé, régions live persistantes, badges spécialisés (StatusBadge 8 statuts, ConfidentialityBadge 4 niveaux, KindBadge 6 familles)
+- [x] Page `/correspondance/[ref]` : deep-link plein écran, URL partageable
+- [x] Page `/correspondance/nouveau` + wizard 3 étapes : Type (radio 16 kinds groupés par famille, badge Circuit), Destinataires (picker To/CC/BCC + organism, liste éditable), Rédaction (sujet+body+urgent), submit → createDraft + addRecipient×N + submitForSignature OU sendDirect → redirect
+- [x] Sidebar admin : compteur `correspondenceUnread` déjà câblé
+- [x] Page citoyen `/mon-espace/courriers` : 2 colonnes Reçus / Envoyés
+- [x] Page citoyen `/mon-espace/courriers/[ref]` : thread complet read-only avec CitizenThreadActions (Acknowledge si To+pas d'AR, Répondre avec composer inline), avatar "Vous", signature IDN
+- [x] Page citoyen `/mon-espace/courriers/nouveau` : formulaire simplifié une page, 3 kinds autorisés, picker administration, mention RGPD + signature IDN
+- [x] Sidebar citoyen : nouvelle entrée "Courriers officiels" avec badge unreadCorrespondences
+
+### Validation (Phase E)
+- [x] RGAA : patterns Bloc 3 appliqués partout (useModalA11y partagé, zones live persistantes, fieldsets/legends sur radios, labels htmlFor, aria-required, aria-current, role="dialog" + aria-modal, role="status"/"alert" avec aria-live et aria-atomic, sémantique sections + ol/ul, statuts par texte+icône+couleur, cibles tactiles 32×32px ≥ WCAG 2.5.5 AA)
+- [x] Typecheck 5 packages : 0 erreur
+- [x] Tests backend : 227/227 verts
+- [ ] Test manuel scénario complet : agent A crée brouillon → ajoute destinataires → soumet pour visa → 3 approbations → corres envoyée → destinataire reçoit notif → AR + reply → fil affiché correctement de bout en bout
+- [ ] Tests NVDA/VoiceOver sur les dialogs (programmatique = ~70% du chemin a11y)
+- [ ] Test citoyen : Marie écrit à DG EC depuis /mon-espace/courriers/nouveau, son courrier apparaît dans inbox des agents EC
+- [ ] Vraie PKI S/MIME (stub `lib/smime.ts` en place, interface prête)
+
+✅ **Bloc 5 clôturé** : [x] (sous réserve test manuel + vraie PKI reportée)
 
 ---
 
@@ -258,7 +282,7 @@
 | 2. Dépôt en profondeur | ✅ backend + UI (validation manuelle à faire) | 2026-05-25 | 2026-05-25 |
 | 3. Traitement demande | ✅ backend + UI (validation manuelle à faire) | 2026-05-26 | 2026-05-26 |
 | 4. Document vérifiable | ✅ backend + UI + QR (test scan manuel à faire) | 2026-05-26 | 2026-05-26 |
-| 5. Correspondance | 🔴 | — | — |
+| 5. Correspondance | ✅ backend + UI admin + UI citoyen + RGAA (test manuel à faire) | 2026-05-26 | 2026-05-26 |
 | 6. Archivage SAE | 🔴 | — | — |
 
 ---

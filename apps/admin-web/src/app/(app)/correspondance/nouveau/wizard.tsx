@@ -524,8 +524,9 @@ function RecipientList({
             onClick={() => onRemove(i)}
             aria-label={`Retirer ${r.organismName}`}
             style={{
-              width: 28,
-              height: 28,
+              // 32×32 — WCAG 2.5.5 AA (24px min)
+              width: 32,
+              height: 32,
               border: "1px solid var(--ink-200)",
               borderRadius: 4,
               background: "white",
