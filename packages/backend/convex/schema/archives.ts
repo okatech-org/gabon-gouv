@@ -31,10 +31,19 @@ export const archivesTables = {
     lastIntegrityCheckOutcome: v.optional(integrityCheckOutcomeValidator),
     linkedDocumentId: v.optional(v.id("documents")),
     linkedRequestId: v.optional(v.id("requests")),
+    linkedCorrespondenceId: v.optional(v.id("correspondences")),
+    // ─── Bloc 6 — adapter SAE externe (Option C hybride) ───
+    // Identifiant et type du SAE externe qui détient l'archive probante.
+    // Vides pour les archives gérées localement (LocalSaeProvider).
+    externalSaeId: v.optional(v.string()),
+    externalSaeKind: v.optional(v.string()), // "digitalium" | "vitam" | …
+    externalStatus: v.optional(v.string()),
+    externalStatusUpdatedAt: v.optional(v.number()),
   })
     .index("by_cote", ["cote"])
     .index("by_organism_status", ["producerOrganismId", "status"])
-    .index("by_dua_expiry", ["duaExpiresAt"]),
+    .index("by_dua_expiry", ["duaExpiresAt"])
+    .index("by_external_id", ["externalSaeId"]),
 
   // Lots d'élimination réglementaire (A7) — visa DGAN obligatoire
   eliminationBatches: defineTable({

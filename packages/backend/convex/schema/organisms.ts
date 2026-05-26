@@ -56,6 +56,18 @@ export const organismsTables = {
     capacityPct: v.optional(v.number()),
     avgDelayHours: v.optional(v.number()),
     avgSatisfaction: v.optional(v.number()),
+    // ─── Bloc 6 — Configuration SAE (Option C hybride) ───
+    // Détermine quel SaeProvider Gabon Connect utilise pour cet organisme.
+    // Si absent → LocalSaeProvider (défaut). Si "digitalium" → push HMAC
+    // vers Digitalium SAE national avec le connecteur configuré.
+    saeConfig: v.optional(
+      v.object({
+        provider: v.union(v.literal("local"), v.literal("digitalium")),
+        digitaliumConnectorId: v.optional(v.string()),
+        digitaliumBaseUrl: v.optional(v.string()),
+        // Le signing secret HMAC reste côté env vars Convex, jamais en DB.
+      }),
+    ),
   })
     .index("by_status", ["status"])
     .index("by_category", ["category"])

@@ -1,148 +1,156 @@
+import Link from "next/link"
 import { redirect } from "next/navigation"
-import type { Tone } from "@workspace/ui"
 import {
   Badge,
-  Button,
   Card,
-  Checkbox,
   Icon,
   PageHeader,
   SectionHeading,
   StatCard,
   Table,
-  Tabs,
   Td,
-  TextInput,
   Th,
   Tr,
+  type Tone,
 } from "@workspace/ui"
 import { api } from "@workspace/backend/generated"
 import { convex } from "@/lib/convex"
 import { getCurrentAgent } from "@/lib/current-agent"
 import { longDate } from "@/lib/format"
 
+/**
+ * Page /archives — Bloc 6 (Option C hybride).
+ *
+ * Refonte vs v1 mockup :
+ *   - Plus de gestion de bordereaux d'élimination (délégué au SAE national)
+ *   - Plus de visa DGAN (idem)
+ *   - Banner "SAE national non configuré" si organisme en mode local
+ *   - Stats Bloc 6 (total, active, DUA expirée, pending dispatch)
+ *   - Tabs scopes (toutes / actives / DUA expirée / à pousser)
+ *   - Liste consultation seule avec lien vers /archives/[cote]
+ */
+
 interface ArchiveRow {
+  id: string
   cote: string
   description: string
   versedAt: number
   dua: string
+  duaExpiresAt?: number
   status: string
   finalSort: string
-  sha256: string
+  sha256Short: string
+  externalSaeKind?: string
+  externalStatus?: string
 }
 
 interface ArchiveStats {
-  versedThisMonth: number
   total: number
-  pendingDestruction: number
-  integrityPct: number
+  active: number
+  duaExpired: number
+  externalPending: number
+  providerKind: "local" | "digitalium" | "noop"
 }
 
-function archiveStatusBadge(status: string): { label: string; tone: Tone } {
-  switch (status) {
-    case "active":
-      return { label: "Actif", tone: "active" }
-    case "semi_active":
-      return { label: "Semi-actif", tone: "semi" }
-    case "scheduled_destruction":
-      return { label: "Élim. planifiée", tone: "warning" }
-    case "destroyed":
-      return { label: "Détruit", tone: "neutral" }
-    case "permanent":
-      return { label: "Conservation déf.", tone: "archived" }
-    default:
-      return { label: status, tone: "neutral" }
-  }
+type Scope = "all" | "active" | "dua_expired" | "external_pending"
+
+interface PageProps {
+  searchParams: Promise<{ scope?: string; search?: string }>
 }
 
-function shortHash(sha: string): string {
-  if (sha.length <= 12) return sha
-  return `${sha.slice(0, 6)}…${sha.slice(-4)}`
-}
-
-// TODO: migrer compliance & elimination vers Convex.
-const COMPLIANCE = [
-  {
-    title: "Empreintes SHA-256",
-    description: "Recalculées toutes les 24h.",
-  },
-  {
-    title: "Journal d'événements scellé",
-    description: "186 472 lignes · scellement quotidien.",
-  },
-  {
-    title: "Réplication géographique",
-    description: "Owendo (primaire) + Mvengue (secours).",
-  },
-  {
-    title: "Audit annuel BSI",
-    description: "Prochaine échéance : nov. 2026.",
-  },
-]
-
-const ELIMINATION_LOTS = [
-  { title: "Casiers judiciaires expirés (T1 2026)", count: 142, sort: "Destruction physique" },
-  { title: "Demandes passeport non abouties", count: 84, sort: "Destruction logique" },
-  { title: "Brouillons d'actes annulés", count: 124, sort: "Destruction logique" },
-  { title: "Notifications expirées > 90 j", count: 62, sort: "Destruction logique" },
-]
-
-export default async function AdminArchivesPage() {
+export default async function ArchivesPage({ searchParams }: PageProps) {
   const session = await getCurrentAgent()
   if (!session) redirect("/login")
+  const sp = await searchParams
+  const scope: Scope =
+    sp.scope === "active" ||
+    sp.scope === "dua_expired" ||
+    sp.scope === "external_pending"
+      ? sp.scope
+      : "all"
+  const search = sp.search?.trim() || undefined
 
-  const [archives, stats] = await Promise.all([
-    convex.query(api.admin.archives.list, { token: session.token }) as Promise<
-      ArchiveRow[]
-    >,
-    convex.query(api.admin.archives.stats, { token: session.token }) as Promise<
-      ArchiveStats
-    >,
+  const [list, stats] = await Promise.all([
+    convex.query(api.admin.archives.listForOrg, {
+      token: session.token,
+      scope,
+      search,
+    }) as Promise<ArchiveRow[]>,
+    convex.query(api.admin.archives.getStatsForOrg, {
+      token: session.token,
+    }) as Promise<ArchiveStats>,
   ])
 
-  const producerLabel =
-    session.agent.organism?.shortName ?? session.agent.organism?.name ?? "—"
+  const providerLocal = stats.providerKind === "local"
 
   return (
     <>
       <PageHeader
-        breadcrumbs={["Archives (SAE)"]}
+        breadcrumbs={["Archives"]}
         title="Archives à valeur probante"
-        subtitle={`Système d'Archivage Électronique conforme NF Z42-013 · ${stats.total.toLocaleString("fr-FR")} unités d'archives`}
-        meta={
-          <>
-            <Badge tone="archived" dot icon="shieldCheck">
-              NF Z42-013
-            </Badge>
-            <Badge tone="active" icon="database">
-              Hébergé au Gabon
-            </Badge>
-            <span style={{ fontSize: 12, color: "var(--ink-600)" }}>
-              Stockage utilisé · <b>2,4 To / 5 To</b>
-            </span>
-          </>
-        }
-        actions={
-          <>
-            <Button variant="outline" icon="upload">
-              Verser au SAE
-            </Button>
-            <Button variant="outline" icon="search">
-              Recherche avancée
-            </Button>
-          </>
+        subtitle={
+          providerLocal
+            ? "Archives gérées localement par Gabon Connect. Pour l'archivage légal complet (élimination, récolement, intégrité), connectez le SAE national."
+            : "Archives versées au Système d'Archivage Électronique national."
         }
       />
-      <div
+      <main
+        id="main"
+        tabIndex={-1}
         style={{
           padding: "20px 32px",
           display: "flex",
           flexDirection: "column",
           gap: 16,
-          maxWidth: 1400,
-          width: "100%",
+          flex: 1,
         }}
       >
+        {/* Banner SAE national non configuré */}
+        {providerLocal && (
+          <Card>
+            <div
+              role="region"
+              aria-labelledby="sae-banner-heading"
+              style={{
+                display: "flex",
+                gap: 12,
+                alignItems: "flex-start",
+                padding: 4,
+              }}
+            >
+              <Icon
+                name="alertTriangle"
+                size={20}
+                aria-hidden="true"
+                style={{ color: "var(--warning-500)", flexShrink: 0 }}
+              />
+              <div style={{ flex: 1 }}>
+                <h2
+                  id="sae-banner-heading"
+                  style={{ fontSize: 14, fontWeight: 700, margin: 0 }}
+                >
+                  Système d&apos;Archivage Électronique national non configuré
+                </h2>
+                <p
+                  style={{
+                    fontSize: 13,
+                    color: "var(--ink-700)",
+                    margin: "4px 0 0",
+                  }}
+                >
+                  Vos archives sont conservées localement par Gabon Connect en
+                  consultation. L&apos;<strong>élimination réglementaire</strong>{" "}
+                  (visa DGAN), le <strong>récolement périodique</strong> et la{" "}
+                  <strong>vérification d&apos;intégrité hebdomadaire</strong>{" "}
+                  nécessitent un branchement au SAE national, lorsque celui-ci
+                  sera disponible.
+                </p>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* Stats */}
         <div
           style={{
             display: "grid",
@@ -151,226 +159,189 @@ export default async function AdminArchivesPage() {
           }}
         >
           <StatCard
-            label="Versés ce mois"
-            value={stats.versedThisMonth.toLocaleString("fr-FR")}
-            icon="upload"
+            label="Total archives"
+            value={String(stats.total)}
+            icon="archive"
           />
           <StatCard
-            label="Empreintes scellées"
-            value={stats.total.toLocaleString("fr-FR")}
-            icon="shieldCheck"
-          />
-          <StatCard
-            label="En attente d&apos;élim."
-            value={stats.pendingDestruction.toLocaleString("fr-FR")}
-            icon="trash"
-            hint="DUA dépassée"
-          />
-          <StatCard
-            label="Intégrité"
-            value={`${stats.integrityPct} %`}
+            label="Actives"
+            value={String(stats.active)}
             icon="checkCircle"
-            hint="dernier contrôle 19/05"
+          />
+          <StatCard
+            label="DUA expirée"
+            value={String(stats.duaExpired)}
+            icon="clock"
+            hint={
+              stats.duaExpired > 0
+                ? "À éliminer via SAE national"
+                : "Aucune action"
+            }
+          />
+          <StatCard
+            label="À pousser au SAE"
+            value={String(stats.externalPending)}
+            icon="upload"
+            hint={
+              stats.externalPending > 0
+                ? "En attente de dispatch"
+                : "Toutes synchronisées"
+            }
           />
         </div>
 
-        <Card>
-          <div
+        {/* Tabs scopes */}
+        <Card padded={false}>
+          <nav
+            aria-label="Filtrage par statut"
             style={{
               display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: 14,
+              gap: 2,
+              padding: 10,
+              borderBottom: "1px solid var(--ink-150)",
             }}
           >
-            <Tabs
-              tabs={[
-                { id: "recent", label: "Versements récents" },
-                { id: "fonds", label: "Fonds (ISAD-G)" },
-                { id: "elim", label: "Plan d'élimination" },
-                { id: "comm", label: "Communications" },
-              ]}
-              current="recent"
-              variant="line"
-            />
-            <div style={{ display: "flex", gap: 8 }}>
-              <TextInput
-                placeholder="Cote, mots-clés…"
-                icon="search"
-                style={{ width: 220 }}
-              />
-              <Button variant="ghost" icon="filter">
-                Filtrer
-              </Button>
+            {(
+              [
+                { id: "all", label: "Toutes" },
+                { id: "active", label: "Actives" },
+                { id: "dua_expired", label: "DUA expirée" },
+                { id: "external_pending", label: "À pousser" },
+              ] as { id: Scope; label: string }[]
+            ).map((t) => {
+              const active = scope === t.id
+              return (
+                <Link
+                  key={t.id}
+                  href={`/archives?scope=${t.id}`}
+                  aria-current={active ? "page" : undefined}
+                  style={{
+                    padding: "6px 10px",
+                    fontSize: 12,
+                    fontWeight: active ? 700 : 500,
+                    color: active ? "var(--primary-700)" : "var(--ink-700)",
+                    background: active ? "var(--primary-50)" : "transparent",
+                    borderRadius: 4,
+                    textDecoration: "none",
+                  }}
+                >
+                  {t.label}
+                </Link>
+              )
+            })}
+          </nav>
+
+          {list.length === 0 ? (
+            <div
+              style={{
+                padding: 32,
+                textAlign: "center",
+                color: "var(--ink-500)",
+                fontSize: 13,
+              }}
+            >
+              Aucune archive dans cette vue.
             </div>
-          </div>
-          <Table>
-            <thead>
-              <tr>
-                <Th>Cote</Th>
-                <Th>Description</Th>
-                <Th>Producteur</Th>
-                <Th>Versement</Th>
-                <Th>DUA</Th>
-                <Th>Statut</Th>
-                <Th>Sort final</Th>
-                <Th>Empreinte</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {archives.map((r) => {
-                const status = archiveStatusBadge(r.status)
-                return (
+          ) : (
+            <Table>
+              <thead>
+                <tr>
+                  <Th scope="col">Cote</Th>
+                  <Th scope="col">Description</Th>
+                  <Th scope="col">Versé le</Th>
+                  <Th scope="col">DUA</Th>
+                  <Th scope="col">Statut</Th>
+                  <Th scope="col">Sort final</Th>
+                  <Th scope="col">Empreinte</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {list.map((r) => (
                   <Tr key={r.cote}>
-                    <Td
-                      style={{
-                        fontFamily: "var(--font-mono)",
-                        fontSize: 12,
-                        fontWeight: 600,
-                      }}
-                    >
-                      {r.cote}
+                    <Td>
+                      <Link
+                        href={`/archives/${encodeURIComponent(r.cote)}`}
+                        style={{
+                          fontFamily: "var(--font-mono)",
+                          fontSize: 12,
+                          color: "var(--primary-600)",
+                          textDecoration: "underline",
+                        }}
+                      >
+                        {r.cote}
+                      </Link>
                     </Td>
                     <Td>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <Icon
-                          name="fileText"
-                          size={14}
-                          style={{ color: "var(--ink-500)" }}
-                        />
-                        <span style={{ fontWeight: 500 }}>{r.description}</span>
+                      <div style={{ fontSize: 13, fontWeight: 500 }}>
+                        {r.description}
                       </div>
+                      {r.externalStatus === "pending_dispatch" && (
+                        <Badge tone="warning" size="sm">
+                          En attente SAE
+                        </Badge>
+                      )}
                     </Td>
-                    <Td>{producerLabel}</Td>
-                    <Td style={{ color: "var(--ink-600)" }}>{longDate(r.versedAt)}</Td>
-                    <Td style={{ fontWeight: 600 }}>{r.dua}</Td>
+                    <Td style={{ fontSize: 12.5, color: "var(--ink-700)" }}>
+                      {longDate(r.versedAt)}
+                    </Td>
+                    <Td style={{ fontSize: 12.5 }}>
+                      {r.dua}
+                      {r.duaExpiresAt && r.duaExpiresAt < Date.now() && (
+                        <Badge tone="danger" size="sm" style={{ marginLeft: 4 }}>
+                          Expirée
+                        </Badge>
+                      )}
+                    </Td>
                     <Td>
-                      <Badge tone={status.tone} dot>
-                        {status.label}
-                      </Badge>
+                      <StatusBadge status={r.status} />
                     </Td>
-                    <Td style={{ fontSize: 12, color: "var(--ink-700)" }}>
+                    <Td style={{ fontSize: 12.5, color: "var(--ink-700)" }}>
                       {r.finalSort}
                     </Td>
                     <Td
                       style={{
                         fontFamily: "var(--font-mono)",
                         fontSize: 11,
-                        color: "var(--ink-600)",
+                        color: "var(--ink-500)",
                       }}
                     >
-                      {shortHash(r.sha256)}
+                      {r.sha256Short}…
                     </Td>
                   </Tr>
-                )
-              })}
-            </tbody>
-          </Table>
+                ))}
+              </tbody>
+            </Table>
+          )}
         </Card>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 16,
-          }}
-        >
-          <Card>
-            <SectionHeading title="Conformité NF Z42-013" level={3} />
-            {/* TODO: migrer compliance vers Convex */}
-            {COMPLIANCE.map((c) => (
-              <div
-                key={c.title}
-                style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: 10,
-                  padding: "8px 0",
-                  borderBottom: "1px solid var(--ink-150)",
-                }}
-              >
-                <span
-                  style={{
-                    width: 20,
-                    height: 20,
-                    borderRadius: "50%",
-                    background: "var(--success-500)",
-                    color: "white",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                    marginTop: 2,
-                  }}
-                >
-                  <Icon name="check" size={11} stroke={3} />
-                </span>
-                <div>
-                  <div style={{ fontSize: 13.5, fontWeight: 600 }}>{c.title}</div>
-                  <div style={{ fontSize: 12.5, color: "var(--ink-600)" }}>
-                    {c.description}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </Card>
+        {/* Empty for placeholder */}
+        {!providerLocal && (
           <Card>
             <SectionHeading
-              title="Élimination réglementaire"
-              subtitle={`${stats.pendingDestruction} unités d'archives à éliminer après visa du Directeur des Archives Nationales.`}
+              title="Bordereaux d'élimination"
+              subtitle="Gérés par le SAE national. Consultez la console SAE pour visualiser et valider les bordereaux."
               level={3}
-              action={
-                <Button variant="secondary" icon="trash" size="sm">
-                  Préparer bordereau
-                </Button>
-              }
             />
-            <div
-              style={{
-                background: "var(--warning-50)",
-                border: "1px solid #f0c269",
-                borderRadius: 6,
-                padding: 12,
-                fontSize: 13,
-                color: "var(--ink-700)",
-              }}
-            >
-              <Icon
-                name="alertTriangle"
-                size={13}
-                style={{
-                  verticalAlign: "middle",
-                  marginRight: 6,
-                  color: "var(--warning-600)",
-                }}
-              />
-              <b>{ELIMINATION_LOTS.length} lots à valider.</b> Bordereau
-              d&apos;élimination généré le 18/05, en attente du visa de la DGAN.
-            </div>
-            {/* TODO: migrer elimination lots vers Convex */}
-            {ELIMINATION_LOTS.map((l) => (
-              <div
-                key={l.title}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "10px 0",
-                  borderBottom: "1px solid var(--ink-150)",
-                }}
-              >
-                <Checkbox checked={true} id={l.title} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 600 }}>{l.title}</div>
-                  <div style={{ fontSize: 12, color: "var(--ink-600)" }}>
-                    {l.count} unités · {l.sort}
-                  </div>
-                </div>
-              </div>
-            ))}
           </Card>
-        </div>
-      </div>
+        )}
+      </main>
     </>
+  )
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const map: Record<string, { label: string; tone: Tone }> = {
+    active: { label: "Active", tone: "success" },
+    pending: { label: "En attente", tone: "warning" },
+    semi_active: { label: "Semi-active", tone: "info" },
+    scheduled_destruction: { label: "Élim. planifiée", tone: "warning" },
+    destroyed: { label: "Détruite", tone: "neutral" },
+    archived: { label: "Archivée", tone: "neutral" },
+  }
+  const m = map[status] ?? { label: status, tone: "neutral" as const }
+  return (
+    <Badge tone={m.tone} size="sm">
+      {m.label}
+    </Badge>
   )
 }

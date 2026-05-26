@@ -48,6 +48,7 @@ import type * as lib_correspondenceLifecycle from "../lib/correspondenceLifecycl
 import type * as lib_enums from "../lib/enums.js";
 import type * as lib_issuance from "../lib/issuance.js";
 import type * as lib_permissions from "../lib/permissions.js";
+import type * as lib_saeProvider from "../lib/saeProvider.js";
 import type * as lib_signatureCircuit from "../lib/signatureCircuit.js";
 import type * as lib_smime from "../lib/smime.js";
 import type * as lib_triggers from "../lib/triggers.js";
@@ -122,6 +123,7 @@ declare const fullApi: ApiFromModules<{
   "lib/enums": typeof lib_enums;
   "lib/issuance": typeof lib_issuance;
   "lib/permissions": typeof lib_permissions;
+  "lib/saeProvider": typeof lib_saeProvider;
   "lib/signatureCircuit": typeof lib_signatureCircuit;
   "lib/smime": typeof lib_smime;
   "lib/triggers": typeof lib_triggers;

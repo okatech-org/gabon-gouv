@@ -232,26 +232,40 @@
 
 ---
 
-## Bloc 6 — Archivage SAE complet (côté agent)
+## Bloc 6 — Archivage SAE (architecture hybride Option C)
 
-**Entités** : `archives`, `eliminationBatches`
+> **Décision d'architecture** : voir [`archive-sae-spec.md`](./archive-sae-spec.md).
+> Gabon Connect ne fait que **verser** et **consulter** ; l'archivage légal
+> complet (élimination, récolement, intégrité périodique, visa DGAN) est
+> délégué à **Digitalium SAE** national quand celui-ci sera déployé. Pour
+> l'instant, mode local par défaut (consultation read-only des archives
+> insérées par les Blocs 3, 4 et 5).
 
-### Backend
-- [ ] Trigger : à `verseToSAE` ou `issued` (selon politique), créer entrée `archives` avec sha256 + DUA calculée
-- [ ] Mutation `createEliminationBatch` (regroupe archives à DUA expirée)
-- [ ] Mutation `dganVisaBatch` / `dganRefuseBatch` (rôle `platform_admin` ou agent DGAN)
-- [ ] Mutation `executeBatch` (passe les archives au statut éliminé)
-- [ ] Action `checkArchiveIntegrity(cote)` (recalcule sha256, met à jour `lastIntegrityCheckAt`)
-- [ ] Job cron : intégrité hebdomadaire sur échantillon
+**Entités** : `archives` (étendue), `organisms.saeConfig` (nouvelle)
+
+### Backend (architecture hybride)
+- [x] Interface `SaeProvider` (`lib/saeProvider.ts`) : `verse()` + `getStatus()`, kind `local` | `digitalium`
+- [x] `LocalSaeProvider` (défaut v1) : insert idempotent dans la table `archives` locale (par documentId/correspondenceId/cote)
+- [x] `DigitaliumSaeProvider` (skeleton v1) : insert local + marqueur `externalSaeKind=digitalium` + `externalStatus=pending_dispatch`. Push HMAC vers `/api/connectors/:id/events` à brancher quand Digitalium SAE déployé (ADR-0021)
+- [x] Factory `getSaeProvider(organismId)` : lit `organisms.saeConfig.provider`, fallback local
+- [x] Schema deltas : `archives.externalSaeId/externalSaeKind/externalStatus/externalStatusUpdatedAt/linkedCorrespondenceId` + index `by_external_id` + `organisms.saeConfig` (provider + connectorId + baseUrl)
+- [x] Queries `admin.archives.*` : `listForOrg(scope, search)` avec 4 scopes (all/active/dua_expired/external_pending), `getDetail(cote)` consultation enrichie (entités liées), `getStatsForOrg` (total/active/duaExpired/externalPending/providerKind)
+- [x] Insertion automatique des archives déjà câblée Bloc 3 (`finalizeIssuance`) et Bloc 5 (`archiveCorrespondence`)
+- [ ] **Délégué au SAE national** : élimination, bordereaux, visa DGAN, récolement, intégrité hebdomadaire — **hors scope Gabon Connect**
 
 ### Front
-- [ ] Page `/archives` : recherche par cote, filtre DUA expirée, statut intégrité
-- [ ] Page `/archives/bordereaux` : liste des `eliminationBatches`, statut visa
-- [ ] Page `/archives/bordereaux/[id]` : détail bordereau, archives incluses, action visa (côté DGAN)
-- [ ] Bouton "Verser au SAE" sur demande terminée
-- [ ] Banner d'alerte sur archives à DUA expirée non encore versées en bordereau
+- [x] Page `/archives` refondue : banner « SAE national non configuré » si mode local, stats (total + active + DUA expirée + external pending), 4 tabs scopes, table consultation read-only avec liens vers détail
+- [x] Page `/archives/[cote]` : détail consultation (métadonnées + authenticité sha256 complet + horodatage qualifié + intégrité + entités liées request/document/correspondance + SAE externe si renseigné)
+- [ ] Page `/parametres/sae` (configuration du connecteur Digitalium) — Phase 4 future quand SAE national arrive
+- [ ] Webhook receiver `/api/sae-webhook` pour les updates de statut externe — Phase 4 future
 
-✅ **Bloc 6 clôturé** : [ ]
+### Validation
+- [x] Tests backend : **239/239 verts** (+12 tests Bloc 6 : LocalSaeProvider verse/idempotence/getStatus, factory getSaeProvider, DigitaliumSaeProvider skeleton, queries listForOrg avec 4 scopes, getDetail cross-org, getStatsForOrg providerKind)
+- [x] Typecheck OK sur les 5 packages
+- [ ] Click-through manuel : un organisme local consulte ses archives, un organisme avec `saeConfig.provider=digitalium` voit ses archives marquées « En attente SAE »
+- [ ] Plan de migration : quand Digitalium SAE est déployé → implémenter `dispatchToDigitalium` (fetch HMAC) dans `DigitaliumSaeProvider.verse` via `ctx.scheduler.runAfter`, capturer `externalSaeId` retourné, ajouter le webhook receiver
+
+✅ **Bloc 6 clôturé** : [x] (sous réserve déploiement Digitalium SAE pour brancher le push réel)
 
 ---
 
@@ -283,7 +297,7 @@
 | 3. Traitement demande | ✅ backend + UI (validation manuelle à faire) | 2026-05-26 | 2026-05-26 |
 | 4. Document vérifiable | ✅ backend + UI + QR (test scan manuel à faire) | 2026-05-26 | 2026-05-26 |
 | 5. Correspondance | ✅ backend + UI admin + UI citoyen + RGAA (test manuel à faire) | 2026-05-26 | 2026-05-26 |
-| 6. Archivage SAE | 🔴 | — | — |
+| 6. Archivage SAE | ✅ hybride Option C (local + skeleton Digitalium) | 2026-05-26 | 2026-05-26 |
 
 ---
 
