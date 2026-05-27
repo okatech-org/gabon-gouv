@@ -1,7 +1,7 @@
 # Flux critiques — suivi d'implémentation
 
 > Document vivant. À cocher au fur et à mesure. Chaque bloc bouclé = on passe au suivant.
-> Dernière mise à jour : 2026-05-24.
+> Dernière mise à jour : 2026-05-27.
 
 ## Légende
 
@@ -269,22 +269,92 @@
 
 ---
 
-## Trous transverses identifiés (à intercaler)
+## Trous transverses — phases A à G (2026-05-27) ✅
 
-### Équipe (admin)
-- [ ] Mutation `inviteAgent` (envoi email + création compte pending)
-- [ ] Mutation `updateAgentRole`
-- [ ] Mutation `deactivateAgent`
-- [ ] Page `/equipe/nouveau` (Dialog probablement)
+7 phases bouclées en post-Bloc-6, toutes commitées et poussées sur `origin/main`
+(58 commits). Voir le bilan détaillé ci-dessous.
 
-### Plateforme — onboarding réel
+### Équipe (admin) — Phase B ✅
+- [x] Table `agentInvitations` avec token magique (64 chars hex, TTL 14 jours)
+- [x] Mutation `inviteAgent` (`admin/team.ts`) avec garde anti-doublon + anti-platform_admin
+- [x] Mutation `revokeInvitation` (état `pending` uniquement)
+- [x] Mutation `disableAgent` / `enableAgent` avec garde « dernier admin actif »
+- [x] Mutation `changeAgentRole` avec même garde
+- [x] Mutation publique `acceptInvitation` (pas d'auth, le token suffit)
+- [x] Query `listInvitations` (filtres scope)
+- [x] Query publique `getInvitationByToken` pour la page d'enrôlement
+- [x] Page `/equipe` refondue (tabs Membres/Invitations, dialogs `useModalA11y`,
+  dropdown actions, copie du lien d'enrôlement)
+- [x] Page publique `/enrolement/[token]` avec form NIP + nom + fonction
+- [x] Audit complet : chaque action insère dans `teamActivities` + `auditLog`
+- [x] 21 tests dédiés (`admin/team.test.ts`)
+
+### Plateforme — onboarding réel — Phase C ✅ (partiel)
+- [x] `platform.registerOrganism` étendu : `firstAdminEmail` / `firstAdminFunction`
+  crée automatiquement une `agentInvitation` pending pour le 1er admin organisme
+- [x] Dialog platform `RegisterOrganismDialog` étendu : affiche le lien
+  d'enrôlement copiable au retour, suffisant pour transmettre manuellement
+- [x] Composant `FirstStepsBanner` sur dashboard admin (checklist 3 étapes :
+  équipe invitée, SAE configuré, service publié)
+- [x] Mutation `admin.onboarding.finalizeActivation` (admin_organisme passe son
+  organism de `onboarding` → `active`, clôture le `onboardingProcess`, audit)
+- [x] Permission `organism.finalize_self` exclusive à admin_organisme
+- [x] 8 tests dédiés (`admin/onboarding.test.ts`)
 - [ ] Génération de convention onboarding via template + MCP Lumin (P3)
+  *(dépend de la décision provider signature qualifiée)*
 - [ ] Signature électronique de la convention par le représentant de l'organisme
+  *(idem)*
 
-### Notifications réelles
-- [ ] Canal email (provider à choisir : Sendgrid, Mailgun, SMTP DGAN ?)
-- [ ] Canal SMS (provider local Gabon)
-- [ ] Préférences citoyen respectées (`notifications` table existante)
+### Notifications réelles — Phase A ✅ (architecture, dispatch à brancher)
+- [x] `NotificationProvider` pluggable (`lib/notificationProvider.ts`) :
+  `notify(ctx, args)` insère in_app + queue dans `notificationOutbox` selon
+  préférences destinataire
+- [x] Table `notificationOutbox` avec lifecycle pending/sent/failed/skipped
+- [x] Champ `notificationPreferences` (email/sms/muteKinds) sur `citizens` et
+  `agents` schemas
+- [x] Skeletons `StubEmailProvider` + `StubSmsProvider` qui logent (interface
+  prête, dispatch effectif Phase 2)
+- [x] `forceChannels` pour bypass mute (alertes critiques)
+- [x] 15 sites migrés depuis `ctx.db.insert("notifications", …)` direct vers
+  `notify()` (admin, citizen, lib, issuance, correspondence)
+- [x] 13 tests dédiés (`lib/notificationProvider.test.ts`)
+- [ ] **Phase 2** : implémenter `StubEmailProvider.send()` avec un vrai provider
+  (Resend / Postmark / SMTP DGAN) — choix env-var `EMAIL_PROVIDER_API_KEY`
+- [ ] **Phase 2** : implémenter `StubSmsProvider.send()` avec Twilio ou Airtel/Moov
+- [ ] **Phase 2** : worker scheduler qui vide `notificationOutbox` (status=pending)
+  et marque sent/failed selon retour provider
+
+### Dispatch Digitalium SAE — Phase D ✅
+- [x] Action Node `sae/dispatch.ts::toDigitalium` avec fetch + HMAC-SHA256
+  conforme ADR-0021 (X-Event-Id + X-Digitalium-Signature)
+- [x] Retry borné (3 tentatives) avec backoff exponentiel 10s → 60s → 300s
+- [x] Idempotence locale (`already_dispatched`) + côté SAE (`X-Event-Id = archiveId`)
+- [x] Skip gracieux si secret env absent (cas dev/test)
+- [x] Activation dans `DigitaliumSaeProvider.verse()` via `scheduler.runAfter(0, …)`
+- [x] Mutations internes `markDispatched`, `markFailed`, `markSkipped`
+- [x] 8 tests dédiés avec mock fetch + vérification HMAC bit-exact
+- [ ] **Activation prod** : définir `DIGITALIUM_HMAC_SECRET` dans env Convex,
+  configurer `saeConfig.digitaliumConnectorId` + `digitaliumBaseUrl` sur les
+  organisms cibles
+
+### Audit RGAA global — Phase E ✅
+- [x] Suppression des `<main>` dupliqués sur 6 pages admin (layout (app) en
+  fournit déjà un)
+- [x] Skip link + main landmark ajoutés sur platform-web `(app)` layout
+- [x] Skip link + main landmark ajoutés sur citizen-web `PublicShell` (vitrine)
+- [x] Pages Bloc 3 / 5 / 6 conservent leurs patterns RGAA (live regions,
+  useModalA11y, role=region + aria-labelledby)
+
+### Tests E2E Playwright — Phase F ✅ (infra, scénarios à exécuter)
+- [x] `playwright.config.ts` multi-projet (citizen 3000, admin 3001, platform 3002)
+- [x] 3 smoke specs (skip link, main landmark, redirections, enrôlement invalide)
+- [x] tsconfig isolé `tests-e2e/tsconfig.json`
+- [x] README setup + script root `bun run test:e2e`
+- [x] `@playwright/test` ajouté en devDep root
+- [ ] **À exécuter** : `bun playwright install chromium` + démarrer les 3
+  serveurs + `bun run test:e2e` pour valider que les smoke passent
+- [ ] **Scénarios profonds v2** : login complet, soumission demande, parcours
+  signature, vérification QR (nécessitent seed Convex contrôlé)
 
 ---
 
@@ -298,12 +368,61 @@
 | 4. Document vérifiable | ✅ backend + UI + QR (test scan manuel à faire) | 2026-05-26 | 2026-05-26 |
 | 5. Correspondance | ✅ backend + UI admin + UI citoyen + RGAA (test manuel à faire) | 2026-05-26 | 2026-05-26 |
 | 6. Archivage SAE | ✅ hybride Option C (local + skeleton Digitalium) | 2026-05-26 | 2026-05-26 |
+| Trous A — NotificationProvider | ✅ adapter + outbox + 13 tests | 2026-05-27 | 2026-05-27 |
+| Trous B — Gestion d'équipe | ✅ invitations + lifecycle + UI + 21 tests | 2026-05-27 | 2026-05-27 |
+| Trous C — Onboarding réel | ✅ bootstrap platform → admin + 8 tests | 2026-05-27 | 2026-05-27 |
+| Trous D — Dispatch Digitalium | ✅ HMAC réel + retry + 8 tests | 2026-05-27 | 2026-05-27 |
+| Trous E — Audit RGAA global | ✅ landmarks cohérents 3 apps | 2026-05-27 | 2026-05-27 |
+| Trous F — E2E Playwright | ✅ infra + 3 smoke specs (exécution à faire) | 2026-05-27 | 2026-05-27 |
+| Trous G — Push origin/main | ✅ 58 commits poussés | 2026-05-27 | 2026-05-27 |
+
+**Métriques cumulées** : 289 tests backend (18 fichiers), typecheck OK sur les
+6 packages, 0 lint error, 58 commits sur origin/main.
+
+---
+
+## Ce qui reste vraiment (à faire ensuite)
+
+### 🔴 Critique pour aller en prod
+- [ ] **Validation manuelle bout-en-bout** : démarrer Convex + 3 apps, faire un
+  parcours réel complet (citoyen dépose → agent instruit → signataire vise →
+  délivrance PDF → vérif QR public → archivage SAE). Documenter les bugs.
+- [ ] **CI/CD GitHub Actions** : pipeline auto (typecheck + tests + lint + build)
+  sur chaque PR, bonus preview Vercel par PR.
+- [ ] **Décisions architecturales** (voir section ci-dessous) — bloquent
+  Convention onboarding + Délivrance signée qualifiée.
+
+### 🟡 Phase 2 des skeletons (architecture déjà prête)
+- [ ] Brancher 1 vrai provider email dans `StubEmailProvider.send()` + worker
+  outbox (cf. Trous A)
+- [ ] Brancher 1 vrai provider SMS (cf. Trous A)
+- [ ] Activer Digitalium SAE en réel : env vars + saeConfig sur organisms cibles
+  (cf. Trous D)
+- [ ] Convention onboarding : génération template + signature électronique
+  (cf. Trous C — dépend du choix provider signature qualifiée)
+
+### 🟢 Quality-of-life
+- [ ] Exécuter les smoke E2E Playwright (cf. Trous F)
+- [ ] Audit RGAA externe officiel (audit interne fait, tampon cabinet manquant)
+- [ ] Observabilité : Sentry + logs structurés + dashboard santé
+- [ ] Documentation utilisateur : guide agent + guide citoyen (PDF)
+- [ ] Pen-test sécurité : revue OWASP, secrets management formel
+- [ ] Scénarios E2E profonds (login complet, soumission, signature, vérif QR)
 
 ---
 
 ## Décisions architecturales en attente
 
-- Provider PDF (jsPDF côté serveur Convex action, ou microservice puppeteer ?)
-- Provider horodatage qualifié (RFC 3161 — existe-t-il un TSA gabonais agréé ?)
-- Provider signature qualifiée (Lumin MCP, ou autre)
-- Stratégie de versionnage des templates (snapshot dans `documents.templateVersion` déjà prévu — confirmer)
+- [ ] **Provider PDF** : jsPDF côté serveur Convex action ✅ déjà implémenté en v1
+  (`pdf/render.ts` + `pdf/action.ts`). Confirmer ou basculer microservice
+  puppeteer pour rendu plus riche.
+- [ ] **Provider horodatage qualifié RFC 3161** : existe-t-il un TSA gabonais
+  agréé ? Sinon fallback sur stub `qualifiedTimestamp` actuel.
+- [ ] **Provider signature qualifiée** : Lumin MCP envisagé. Bloque la convention
+  onboarding (Trous C reste partiel).
+- [ ] **Stratégie de versionnage des templates** : champ `documents.templateVersion`
+  déjà prévu — confirmer le snapshot au moment de l'émission.
+- [ ] **Provider email transactionnel** : Resend / Postmark / SMTP DGAN ? Bloque
+  Trous A Phase 2.
+- [ ] **Provider SMS Gabon** : Twilio (international) ou Airtel/Moov (local) ?
+  Bloque Trous A Phase 2.
