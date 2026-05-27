@@ -17,6 +17,7 @@ import { convex } from "@/lib/convex"
 import { getCurrentAgent } from "@/lib/current-agent"
 
 interface DirectoryRow {
+  _id: string
   name: string
   shortName?: string
   category: string
@@ -162,9 +163,14 @@ export default async function AdminDirectoryPage() {
                     )}
                   </Td>
                   <Td>
-                    <Button variant="ghost" size="sm" iconRight="arrowRight">
-                      Contacter
-                    </Button>
+                    <a
+                      href={`/correspondance/nouveau?to=${encodeURIComponent(o._id)}`}
+                      style={{ textDecoration: "none" }}
+                    >
+                      <Button variant="ghost" size="sm" iconRight="arrowRight">
+                        Contacter
+                      </Button>
+                    </a>
                   </Td>
                 </Tr>
               )

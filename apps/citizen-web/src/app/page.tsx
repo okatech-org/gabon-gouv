@@ -19,16 +19,16 @@ export default async function CitizenHomePage() {
   ])
 
   const navLinks: { label: string; href: string }[] = [
-    { label: "Démarches", href: "/" },
+    { label: "Démarches", href: "/services" },
     { label: "Administrations", href: "/administrations" },
     { label: "Mon espace", href: "/mon-espace" },
-    { label: "Aide", href: "#" },
+    { label: "Aide", href: "/aide" },
   ]
   const suggestions: { label: string; href: string }[] = [
     { label: "acte de naissance", href: "/services/acte-naissance" },
     { label: "passeport", href: "/services/passeport" },
-    { label: "RCCM", href: "#" },
-    { label: "casier judiciaire", href: "#" },
+    { label: "Registre commerce (RCCM)", href: "/services" },
+    { label: "casier judiciaire", href: "/services" },
   ]
   const howItWorks = [
     {
@@ -324,7 +324,7 @@ export default async function CitizenHomePage() {
             {categories.map((c) => (
               <a
                 key={c.id}
-                href="#"
+                href={`/services?categorie=${c.id}`}
                 style={{
                   border: "1px solid var(--ink-200)",
                   borderRadius: 10,
