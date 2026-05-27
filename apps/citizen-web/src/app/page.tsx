@@ -7,6 +7,7 @@ import {
   RepublicBar,
   SectionHeading,
   pluralize,
+  pluralizeZero,
   type IconName,
 } from "@workspace/ui"
 import { api } from "@workspace/backend/generated"
@@ -368,7 +369,7 @@ export default async function CitizenHomePage() {
                     {c.label}
                   </div>
                   <div style={{ fontSize: 12, color: "var(--ink-500)" }}>
-                    {pluralize(c.count, "démarche")}
+                    {pluralizeZero(c.count, "démarche", "démarches", "Aucune démarche")}
                   </div>
                 </div>
                 <Icon

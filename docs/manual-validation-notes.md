@@ -29,13 +29,17 @@
 - ✅ **B6** : avatar dropdown avec Mes paramètres / Centre d'aide / Se déconnecter (commit `a44a866`)
 - ✅ **B7** : nav vitrine citoyen — Démarches → /services, Aide → /aide, cards catégories → /services?categorie=X (commit `6f7b6e3`)
 - ✅ **B8** : bouton Contacter annuaire → /correspondance/nouveau?to={orgId} (commit `6f7b6e3`)
-- ⏳ **B9** : compteur Correspondance désaligné — **investigation séparée nécessaire** (la query `getSidebarCounts.correspondenceUnread` et `listInboxV2` ne partagent pas le même filtre)
+- ✅ **B9** : compteur Correspondance désaligné — `countCorrespondenceUnread` alignée sur `listInboxV2` (lit `correspondenceRecipients` au lieu de l'index legacy `by_to_organism`). Validé live : sidebar passe de "6" à "0" en cohérence avec vue vide (commit `5fa8881`)
 - ✅ **C1** : helpers `pluralize` / `pluralizeZero` dans @workspace/ui — appliqué annuaire + home (commit `462be5e`)
 - ✅ **C2** : helper `organismCategoryLabel` avec mapping FR officiel — "collectivite" → "Collectivité territoriale" (commit `462be5e`)
 - ✅ **C3** : chiffres home citoyen alignés via `getHomeCounters` (commit `462be5e`)
 - ✅ **C4** : suggestion "RCCM" → "Registre commerce (RCCM)" (commit `6f7b6e3`)
 
-**Score : 11/12 fixés** + 4 bugs Convex round 1.
+**Score : 12/12 fixés** + 4 bugs Convex round 1 + 2 cosmétiques round 2.
+
+### Round 3 — cosmétiques restants (pluriels inline)
+- ✅ /administrations citoyen "1 services en ligne" → `pluralizeZero` avec "Aucun service en ligne"
+- ✅ Home citoyen "0 démarches" sur cards catégorie → "Aucune démarche" via `pluralizeZero`
 
 ---
 
@@ -213,10 +217,17 @@
 
 ---
 
-## Trouvailles round 2 (à fixer plus tard)
+## Trouvailles round 2 ✅ FIXÉES
 
-- **🟡 /administrations citoyen** : pluriels inline non gérés ("1 services en ligne", "0 services en ligne" devrait être "Aucun service"). Utiliser le helper `pluralize` / `pluralizeZero` de `@workspace/ui`.
-- **🟢 0 démarches sur cards home citoyen** : remplacer par "Aucune démarche" via `pluralizeZero`. Cosmétique.
+- ✅ **/administrations citoyen** : pluriels inline → `pluralizeZero` (commit final)
+- ✅ **0 démarches sur cards home citoyen** : → "Aucune démarche" via `pluralizeZero` (commit final)
+
+## Trouvailles round 3 (parcours étendu, à investiguer)
+
+- **🟢 Page /dossiers/[nip] détail** : boutons "Partager", "Habilitations", "Export PDF", "Demander un accès" probablement inertes. À tester.
+- **🟢 Page /onboarding platform** : boutons "Contacter", "Sauvegarder" en haut probablement inertes. À tester.
+- **🟢 Wizard /correspondance/nouveau** : très complet (3 étapes, 16 types), pré-remplissage avec `?to=<orgId>` (B8) à valider.
+- **🟢 Header platform-web** : pas encore configuré pour cloche/aide (juste avatar dropdown branché). Pourrait avoir ses propres pages /notifications et /aide platform.
 
 ## Pages NON encore parcourues (à valider plus tard)
 

@@ -6,6 +6,7 @@ import {
   PageHeader,
   RepublicBar,
   TextInput,
+  pluralizeZero,
   type IconName,
 } from "@workspace/ui"
 import { api } from "@workspace/backend/generated"
@@ -196,7 +197,12 @@ export default async function CitizenDirectoryPage() {
                   }}
                 >
                   <span style={{ color: "var(--ink-700)" }}>
-                    <b>{o.servicesCount}</b> services en ligne
+                    {pluralizeZero(
+                      o.servicesCount,
+                      "service en ligne",
+                      "services en ligne",
+                      "Aucun service en ligne",
+                    )}
                   </span>
                   <span style={{ color: "var(--ink-700)" }}>
                     Délai moy. <b>{o.delay}</b>
