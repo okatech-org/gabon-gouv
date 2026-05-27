@@ -14,10 +14,28 @@
 
 ## Bugs déjà fixés en cours de validation (rappel)
 
-- ✅ `lib/smime.ts` utilisait `node:crypto` au lieu de Web Crypto — bloquait `convex dev` (commit `940a32b`)
-- ✅ Dashboard admin crashait si query `getOnboardingStatus` échouait — wrap catch fallback null (commit `7f902af`)
-- ✅ `pdf/render.tsx` sans `"use node"` + tsconfig sans JSX — bloquait push (commit `9819a12`)
-- ✅ `sae/dispatch.ts` mixait queries+mutations dans Node + utilisait `action` au lieu de `internalAction` — bloquait push (commit `9819a12`)
+### Round 1 — bugs Convex pendant le setup (commits `940a32b`, `7f902af`, `9819a12`)
+- ✅ `lib/smime.ts` utilisait `node:crypto` au lieu de Web Crypto — bloquait `convex dev`
+- ✅ Dashboard admin crashait si query `getOnboardingStatus` échouait — wrap catch fallback null
+- ✅ `pdf/render.tsx` sans `"use node"` + tsconfig sans JSX — bloquait push
+- ✅ `sae/dispatch.ts` mixait queries+mutations dans Node + `action` au lieu de `internalAction` — bloquait push
+
+### Round 2 — fix des 12 bugs UX documentés (commits `797ae68` → `462be5e`)
+- ✅ **B1** : 404 brandée sur les 3 apps + page `/services` côté citoyen (commit `797ae68`)
+- ✅ **B2** : page liste `/dossiers` admin + fix admin-nav (commit `f2b8fc8`)
+- ✅ **B3** : page liste `/generation` admin + fix admin-nav (commit `f2b8fc8`)
+- ✅ **B4** : cloche notif → page `/notifications` avec query listForAgent + markAllRead (commit `a44a866`)
+- ✅ **B5** : bouton Aide → page `/aide` admin avec 6 cards thématiques (commit `a44a866`)
+- ✅ **B6** : avatar dropdown avec Mes paramètres / Centre d'aide / Se déconnecter (commit `a44a866`)
+- ✅ **B7** : nav vitrine citoyen — Démarches → /services, Aide → /aide, cards catégories → /services?categorie=X (commit `6f7b6e3`)
+- ✅ **B8** : bouton Contacter annuaire → /correspondance/nouveau?to={orgId} (commit `6f7b6e3`)
+- ⏳ **B9** : compteur Correspondance désaligné — **investigation séparée nécessaire** (la query `getSidebarCounts.correspondenceUnread` et `listInboxV2` ne partagent pas le même filtre)
+- ✅ **C1** : helpers `pluralize` / `pluralizeZero` dans @workspace/ui — appliqué annuaire + home (commit `462be5e`)
+- ✅ **C2** : helper `organismCategoryLabel` avec mapping FR officiel — "collectivite" → "Collectivité territoriale" (commit `462be5e`)
+- ✅ **C3** : chiffres home citoyen alignés via `getHomeCounters` (commit `462be5e`)
+- ✅ **C4** : suggestion "RCCM" → "Registre commerce (RCCM)" (commit `6f7b6e3`)
+
+**Score : 11/12 fixés** + 4 bugs Convex round 1.
 
 ---
 
