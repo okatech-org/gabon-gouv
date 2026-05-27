@@ -213,6 +213,11 @@
 
 ---
 
+## Trouvailles round 2 (à fixer plus tard)
+
+- **🟡 /administrations citoyen** : pluriels inline non gérés ("1 services en ligne", "0 services en ligne" devrait être "Aucun service"). Utiliser le helper `pluralize` / `pluralizeZero` de `@workspace/ui`.
+- **🟢 0 démarches sur cards home citoyen** : remplacer par "Aucune démarche" via `pluralizeZero`. Cosmétique.
+
 ## Pages NON encore parcourues (à valider plus tard)
 
 ### admin-web
