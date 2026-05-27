@@ -25,7 +25,7 @@ export function buildAdminNav(badges: SidebarBadges = {}): SidebarItem[] {
       id: "dossiers",
       label: "Dossiers citoyens",
       icon: "folder",
-      href: "/dossiers/184127600504",
+      href: "/dossiers",
     },
     {
       id: "signatures",
@@ -38,7 +38,7 @@ export function buildAdminNav(badges: SidebarBadges = {}): SidebarItem[] {
       id: "documents",
       label: "Génération",
       icon: "fileText",
-      href: "/generation/GC-2026-EC-002841",
+      href: "/generation",
     },
     { id: "archives", label: "Archives (SAE)", icon: "archive", href: "/archives" },
     {

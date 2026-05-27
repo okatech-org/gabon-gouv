@@ -12,6 +12,7 @@
 import { v } from "convex/values"
 import { query } from "../_generated/server"
 import { internalMutation } from "../lib/triggers"
+import { requireAgent } from "../auth"
 
 /**
  * Contexte minimal pour rendre un PDF d'acte. Renvoie `null` si le doc
@@ -98,6 +99,75 @@ export const applyPdfResult = internalMutation({
       .first()
     if (archive) {
       await ctx.db.patch(archive._id, { sha256, sizeBytes })
+    }
+  },
+})
+
+/* ---------- Liste de la file de génération PDF ---------- */
+/**
+ * Documents en cours de préparation / signature / récemment émis dans
+ * l'organisme. Utilisée par la page `/generation` (B3 — précédemment,
+ * la sidebar pointait vers une ref de demande hardcodée).
+ *
+ * Tri : status (draft → prepared → signed → issued → revoked) puis date.
+ */
+export const listGenerationQueue = query({
+  args: {
+    token: v.string(),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, { token, limit }) => {
+    const me = await requireAgent(ctx, token)
+    const docs = await ctx.db
+      .query("documents")
+      .withIndex("by_organism", (q) => q.eq("organismId", me.organismId))
+      .collect()
+
+    const enriched = await Promise.all(
+      docs.map(async (d) => {
+        const request = await ctx.db.get(d.requestId)
+        const citizen = await ctx.db.get(d.citizenId)
+        return {
+          documentId: d._id,
+          actNumber: d.actNumber,
+          title: d.title,
+          status: d.status ?? "draft",
+          issuedAt: d.issuedAt,
+          requestRef: request?.ref ?? "—",
+          citizenName: citizen?.name ?? "—",
+          hasPdf: Boolean(d.pdfStorageKey),
+          revokedAt: d.revokedAt,
+        }
+      }),
+    )
+
+    const statusOrder: Record<string, number> = {
+      draft: 0,
+      prepared: 1,
+      signed: 2,
+      issued: 3,
+      revoked: 4,
+    }
+    enriched.sort((a, b) => {
+      const so = statusOrder[a.status] - statusOrder[b.status]
+      if (so !== 0) return so
+      return b.issuedAt - a.issuedAt
+    })
+
+    const inFlightCount = enriched.filter(
+      (d) => d.status === "draft" || d.status === "prepared" || d.status === "signed",
+    ).length
+    const issuedCount = enriched.filter((d) => d.status === "issued").length
+    const revokedCount = enriched.filter((d) => d.status === "revoked").length
+
+    return {
+      stats: {
+        total: enriched.length,
+        inFlight: inFlightCount,
+        issued: issuedCount,
+        revoked: revokedCount,
+      },
+      rows: enriched.slice(0, limit ?? 100),
     }
   },
 })
