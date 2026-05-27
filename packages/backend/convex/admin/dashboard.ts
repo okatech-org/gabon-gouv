@@ -187,18 +187,30 @@ async function countCorrespondenceUnread(
   orgId: Id<"organisms">,
   agentId: Id<"agents">,
 ): Promise<number> {
-  const incoming = await ctx.db
-    .query("correspondences")
-    .withIndex("by_to_organism", (q) => q.eq("toOrganismId", orgId))
+  // Aligné sur listInboxV2 (Bloc 5) : on lit les correspondenceRecipients
+  // dont recipientOrganismId = mon org, puis on déduplique les corresIds.
+  // Avant : on lisait l'index legacy `by_to_organism` (champ toOrganismId v1)
+  // ce qui décalait le compteur de la vue → bug B9.
+  const recipientRows = await ctx.db
+    .query("correspondenceRecipients")
+    .withIndex("by_organism_role", (q) =>
+      q.eq("recipientOrganismId", orgId),
+    )
     .collect()
-  // Une correspondance est "non lue" pour cet agent s'il n'a pas de
-  // `correspondenceReads` row associé.
+  const corresIds = new Set(recipientRows.map((r) => r.correspondenceId))
+  if (corresIds.size === 0) return 0
+
+  // Filtre : non lu = pas de correspondenceReads pour cet agent
   const reads = await ctx.db
     .query("correspondenceReads")
     .withIndex("by_agent", (q) => q.eq("agentId", agentId))
     .collect()
   const readIds = new Set(reads.map((r) => r.correspondenceId))
-  return incoming.filter((c) => !readIds.has(c._id)).length
+  let count = 0
+  for (const id of corresIds) {
+    if (!readIds.has(id)) count++
+  }
+  return count
 }
 
 function formatServiceTitle(service: { title: string; variant?: string }) {
