@@ -18,6 +18,7 @@ import type * as admin_directory from "../admin/directory.js";
 import type * as admin_documentTemplates from "../admin/documentTemplates.js";
 import type * as admin_documents from "../admin/documents.js";
 import type * as admin_mutations from "../admin/mutations.js";
+import type * as admin_notifications from "../admin/notifications.js";
 import type * as admin_onboarding from "../admin/onboarding.js";
 import type * as admin_requests from "../admin/requests.js";
 import type * as admin_serviceRequirements from "../admin/serviceRequirements.js";
@@ -97,6 +98,7 @@ declare const fullApi: ApiFromModules<{
   "admin/documentTemplates": typeof admin_documentTemplates;
   "admin/documents": typeof admin_documents;
   "admin/mutations": typeof admin_mutations;
+  "admin/notifications": typeof admin_notifications;
   "admin/onboarding": typeof admin_onboarding;
   "admin/requests": typeof admin_requests;
   "admin/serviceRequirements": typeof admin_serviceRequirements;

@@ -1,9 +1,10 @@
 import type { ReactNode } from "react"
-import { AppHeader, Sidebar } from "@workspace/ui"
+import { AppHeader, Sidebar, type UserMenuItem } from "@workspace/ui"
 import { api } from "@workspace/backend/generated"
 import { convex } from "@/lib/convex"
 import { requirePlatformUser } from "@/lib/current-platform-user"
 import { buildPlatformNav } from "@/lib/platform-nav"
+import { signOutAction } from "@/app/login/actions"
 
 /**
  * Shell de la console plateforme — guard d'auth + sidebar live.
@@ -42,6 +43,14 @@ export default async function PlatformShellLayout({
         org={user.organism?.name ?? "Gabon Connect — Console plateforme"}
         user={user.name}
         role="Admin plateforme"
+        userMenuItems={[
+          {
+            label: "Se déconnecter",
+            onClick: signOutAction,
+            icon: "x",
+            variant: "danger",
+          } satisfies UserMenuItem,
+        ]}
       />
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
         <Sidebar items={nav} />

@@ -1,11 +1,12 @@
 import { redirect } from "next/navigation"
 import type { ReactNode } from "react"
-import { AppHeader, Sidebar } from "@workspace/ui"
+import { AppHeader, Sidebar, type UserMenuItem } from "@workspace/ui"
 import { api } from "@workspace/backend/generated"
 import { buildAdminNav } from "@/lib/admin-nav"
 import { convex } from "@/lib/convex"
 import { getCurrentAgent } from "@/lib/current-agent"
 import { agentRoleLabel } from "@/lib/format"
+import { signOutAction } from "@/app/login/actions"
 
 /**
  * Layout authentifié pour le back-office admin. Pose le shell (header + sidebar)
@@ -26,6 +27,7 @@ export default async function AppShellLayout({ children }: { children: ReactNode
       queue: 0,
       correspondenceUnread: 0,
       signaturesPending: 0,
+      notificationsUnread: 0,
     }))
 
   const nav = buildAdminNav({
@@ -33,6 +35,25 @@ export default async function AppShellLayout({ children }: { children: ReactNode
     correspondenceUnread: sidebarCounts.correspondenceUnread,
     signaturesPending: sidebarCounts.signaturesPending,
   })
+
+  const userMenu: UserMenuItem[] = [
+    {
+      label: "Mes paramètres",
+      href: "/parametres",
+      icon: "settings",
+    },
+    {
+      label: "Centre d'aide",
+      href: "/aide",
+      icon: "helpCircle",
+    },
+    {
+      label: "Se déconnecter",
+      onClick: signOutAction, // server action passée comme prop client
+      icon: "x",
+      variant: "danger",
+    },
+  ]
 
   return (
     <div
@@ -52,6 +73,10 @@ export default async function AppShellLayout({ children }: { children: ReactNode
         org={session.agent.organism?.shortName ?? session.agent.organism?.name}
         user={session.agent.name}
         role={agentRoleLabel(session.agent.role)}
+        notificationsHref="/notifications"
+        unreadCount={sidebarCounts.notificationsUnread ?? 0}
+        helpHref="/aide"
+        userMenuItems={userMenu}
       />
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
         <Sidebar items={nav} />

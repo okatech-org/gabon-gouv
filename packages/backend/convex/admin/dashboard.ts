@@ -108,6 +108,7 @@ export const getSidebarCounts = query({
       lateOverdue,
       correspondenceUnread,
       signaturesPending,
+      notificationsUnread,
     ] = await Promise.all([
       aggRequestsByOrgStatus.count(ctx, {
         namespace: aggKeys.orgStatus(orgId, "submitted"),
@@ -118,6 +119,7 @@ export const getSidebarCounts = query({
       countLate(ctx, orgId),
       countCorrespondenceUnread(ctx, orgId, agent._id),
       countMySignaturesPending(ctx, agent._id),
+      countMyUnreadNotifications(ctx, agent._id),
     ])
 
     return {
@@ -126,9 +128,24 @@ export const getSidebarCounts = query({
       lateOverdue,
       correspondenceUnread,
       signaturesPending,
+      notificationsUnread,
     }
   },
 })
+
+/** Count des notifications non lues pour l'agent (badge cloche header). */
+async function countMyUnreadNotifications(
+  ctx: QueryCtx,
+  agentId: Id<"agents">,
+): Promise<number> {
+  const rows = await ctx.db
+    .query("notifications")
+    .withIndex("by_recipient_unread", (q) =>
+      q.eq("recipientKind", "agent").eq("recipientId", String(agentId)),
+    )
+    .collect()
+  return rows.filter((n) => n.readAt === undefined).length
+}
 
 /** Count des steps `active` assignés à l'agent (badge sidebar /signatures). */
 async function countMySignaturesPending(
