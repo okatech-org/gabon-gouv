@@ -28,3 +28,24 @@ export const getHomeStats = query({
     ]
   },
 })
+
+/**
+ * Compteurs bruts pour le copywriting (sous-titres, phrases).
+ * Séparé de getHomeStats qui renvoie un array de cards prêt à afficher.
+ */
+export const getHomeCounters = query({
+  args: {},
+  handler: async (ctx) => {
+    const [active, allServices] = await Promise.all([
+      aggOrgsByStatus.count(ctx, { namespace: "active" }),
+      ctx.db.query("services").collect(),
+    ])
+    const totalServices = allServices.filter(
+      (s) => s.status === "published",
+    ).length
+    return {
+      totalServices,
+      totalAdministrations: active,
+    }
+  },
+})

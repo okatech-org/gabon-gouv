@@ -6,17 +6,21 @@ import {
   Logo,
   RepublicBar,
   SectionHeading,
+  pluralize,
   type IconName,
 } from "@workspace/ui"
 import { api } from "@workspace/backend/generated"
 import { convex } from "@/lib/convex"
 
 export default async function CitizenHomePage() {
-  const [categories, topServices, homeStats] = await Promise.all([
-    convex.query(api.citizen.catalog.getCategories, {}),
-    convex.query(api.citizen.catalog.getTopServices, { limit: 6 }),
-    convex.query(api.citizen.home.getHomeStats, {}),
-  ])
+  const [categories, topServices, homeStats, homeCounters] = await Promise.all(
+    [
+      convex.query(api.citizen.catalog.getCategories, {}),
+      convex.query(api.citizen.catalog.getTopServices, { limit: 6 }),
+      convex.query(api.citizen.home.getHomeStats, {}),
+      convex.query(api.citizen.home.getHomeCounters, {}),
+    ],
+  )
 
   const navLinks: { label: string; href: string }[] = [
     { label: "Démarches", href: "/services" },
@@ -307,7 +311,7 @@ export default async function CitizenHomePage() {
         <div style={{ maxWidth: 1280, margin: "0 auto" }}>
           <SectionHeading
             title="Démarches par thème"
-            subtitle="Parcourez les 128 services proposés par les administrations gabonaises."
+            subtitle={`Parcourez ${pluralize(homeCounters.totalServices, "service publié", "services publiés")} par ${pluralize(homeCounters.totalAdministrations, "administration")} ${homeCounters.totalAdministrations > 1 ? "gabonaises" : "gabonaise"}.`}
             action={
               <Link href="/administrations" style={{ fontSize: 14, fontWeight: 600 }}>
                 Voir tout l&apos;annuaire →
@@ -364,7 +368,7 @@ export default async function CitizenHomePage() {
                     {c.label}
                   </div>
                   <div style={{ fontSize: 12, color: "var(--ink-500)" }}>
-                    {c.count} démarches
+                    {pluralize(c.count, "démarche")}
                   </div>
                 </div>
                 <Icon

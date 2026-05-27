@@ -56,3 +56,10 @@ export type { Tone, Size, SidebarItem, SidebarItemLink, SidebarItemSection } fro
 // Hooks
 export { useModalA11y } from "./hooks/use-modal-a11y"
 export type { UseModalA11yOptions } from "./hooks/use-modal-a11y"
+
+// Helpers de formatage texte
+export {
+  pluralize,
+  pluralizeZero,
+  organismCategoryLabel,
+} from "./lib/pluralize"

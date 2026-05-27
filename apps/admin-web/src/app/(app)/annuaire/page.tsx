@@ -11,6 +11,8 @@ import {
   TextInput,
   Th,
   Tr,
+  organismCategoryLabel,
+  pluralize,
 } from "@workspace/ui"
 import { api } from "@workspace/backend/generated"
 import { convex } from "@/lib/convex"
@@ -28,18 +30,11 @@ interface DirectoryRow {
   referent: string
 }
 
+/** Wrap autour de organismCategoryLabel @workspace/ui pour rester
+ *  compat avec d'éventuelles catégories propres à l'annuaire (préfecture,
+ *  tribunal, caisse — pas dans l'enum officiel). */
 function categoryLabel(c: string): string {
   switch (c) {
-    case "direction_generale":
-      return "Direction générale"
-    case "ministere":
-      return "Ministère"
-    case "agence":
-      return "Agence"
-    case "etablissement_public":
-      return "Établissement public"
-    case "mairie":
-      return "Mairie"
     case "prefecture":
       return "Préfecture"
     case "tribunal":
@@ -47,7 +42,7 @@ function categoryLabel(c: string): string {
     case "caisse":
       return "Caisse"
     default:
-      return c
+      return organismCategoryLabel(c)
   }
 }
 
@@ -142,7 +137,7 @@ export default async function AdminDirectoryPage() {
                   <Td style={{ color: "var(--ink-600)" }}>{o.tutelage ?? "—"}</Td>
                   <Td>
                     <Badge tone="primary" size="sm">
-                      {o.servicesCount} services
+                      {pluralize(o.servicesCount, "service")}
                     </Badge>
                   </Td>
                   <Td>
