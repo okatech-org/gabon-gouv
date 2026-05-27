@@ -25,7 +25,6 @@
  * `"ecdsa-p256-sha256"`).
  */
 
-import { createHash } from "node:crypto"
 import type { Id } from "../_generated/dataModel"
 
 export const SMIME_STUB_ALGORITHM = "stub-sha256-v1"
@@ -45,14 +44,17 @@ export interface SignMessageArgs {
 /**
  * Signe un message — version stub.
  *
- * Note : `createHash` est dispo dans le runtime V8 Convex via Web Crypto,
- * mais on utilise `node:crypto` pour la lisibilité. Si on a besoin d'un
- * stub côté non-Node, on bascule sur `crypto.subtle.digest`.
+ * Utilise la Web Crypto API (`crypto.subtle.digest`) disponible dans le
+ * runtime V8 de Convex (et les actions Node). Asynchrone par nature.
+ * Passer à un vrai S/MIME se fera en remplaçant le contenu sans changer
+ * l'API publique.
  */
-export function signMessage(args: SignMessageArgs): SignedMessage {
+export async function signMessage(
+  args: SignMessageArgs,
+): Promise<SignedMessage> {
   const secret = getStubSecret()
   const payload = `${args.body}::${args.agentId}::${args.sentAt}::${secret}`
-  const fingerprint = createHash("sha256").update(payload).digest("hex")
+  const fingerprint = await sha256Hex(payload)
   return {
     signatureFingerprint: fingerprint,
     signatureAlgorithm: SMIME_STUB_ALGORITHM,
@@ -67,19 +69,28 @@ export function signMessage(args: SignMessageArgs): SignedMessage {
  * Pour le vrai S/MIME : vérification de la chaîne de confiance jusqu'à la
  * CA racine + non-révocation du certificat.
  */
-export function verifySignature(args: {
+export async function verifySignature(args: {
   body: string
   agentId: Id<"agents">
   sentAt: number
   fingerprint: string
-}): boolean {
+}): Promise<boolean> {
   if (!args.fingerprint || args.fingerprint.length !== 64) return false
-  const expected = signMessage({
+  const expected = await signMessage({
     body: args.body,
     agentId: args.agentId,
     sentAt: args.sentAt,
   })
   return constantTimeEqual(expected.signatureFingerprint, args.fingerprint)
+}
+
+/** SHA-256 via Web Crypto API → hex string lower-case 64 chars. */
+async function sha256Hex(input: string): Promise<string> {
+  const bytes = new TextEncoder().encode(input)
+  const hash = await crypto.subtle.digest("SHA-256", bytes)
+  return Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
 }
 
 /* ============================================================

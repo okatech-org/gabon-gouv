@@ -14,8 +14,8 @@ import type { Id } from "../_generated/dataModel"
 const fakeAgentId = "agt_abc123" as unknown as Id<"agents">
 
 describe("smime stub", () => {
-  test("signMessage produit fingerprint hex 64 chars + algorithm défini", () => {
-    const sig = signMessage({
+  test("signMessage produit fingerprint hex 64 chars + algorithm défini", async () => {
+    const sig = await signMessage({
       body: "Bonjour Madame",
       agentId: fakeAgentId,
       sentAt: 1_700_000_000_000,
@@ -25,13 +25,13 @@ describe("smime stub", () => {
     expect(sig.signedAt).toBe(1_700_000_000_000)
   })
 
-  test("déterministe : mêmes inputs → même fingerprint", () => {
-    const a = signMessage({
+  test("déterministe : mêmes inputs → même fingerprint", async () => {
+    const a = await signMessage({
       body: "X",
       agentId: fakeAgentId,
       sentAt: 42,
     })
-    const b = signMessage({
+    const b = await signMessage({
       body: "X",
       agentId: fakeAgentId,
       sentAt: 42,
@@ -39,13 +39,13 @@ describe("smime stub", () => {
     expect(a.signatureFingerprint).toBe(b.signatureFingerprint)
   })
 
-  test("verifySignature OK si inputs identiques", () => {
-    const sig = signMessage({
+  test("verifySignature OK si inputs identiques", async () => {
+    const sig = await signMessage({
       body: "Test",
       agentId: fakeAgentId,
       sentAt: 100,
     })
-    const ok = verifySignature({
+    const ok = await verifySignature({
       body: "Test",
       agentId: fakeAgentId,
       sentAt: 100,
@@ -54,14 +54,14 @@ describe("smime stub", () => {
     expect(ok).toBe(true)
   })
 
-  test("verifySignature KO si body modifié", () => {
-    const sig = signMessage({
+  test("verifySignature KO si body modifié", async () => {
+    const sig = await signMessage({
       body: "Original",
       agentId: fakeAgentId,
       sentAt: 100,
     })
     expect(
-      verifySignature({
+      await verifySignature({
         body: "Modifié",
         agentId: fakeAgentId,
         sentAt: 100,
@@ -70,9 +70,9 @@ describe("smime stub", () => {
     ).toBe(false)
   })
 
-  test("verifySignature KO si fingerprint mal formée", () => {
+  test("verifySignature KO si fingerprint mal formée", async () => {
     expect(
-      verifySignature({
+      await verifySignature({
         body: "x",
         agentId: fakeAgentId,
         sentAt: 1,
@@ -80,7 +80,7 @@ describe("smime stub", () => {
       }),
     ).toBe(false)
     expect(
-      verifySignature({
+      await verifySignature({
         body: "x",
         agentId: fakeAgentId,
         sentAt: 1,
@@ -89,14 +89,14 @@ describe("smime stub", () => {
     ).toBe(false)
   })
 
-  test("verifySignature KO si sentAt modifié (anti-replay)", () => {
-    const sig = signMessage({
+  test("verifySignature KO si sentAt modifié (anti-replay)", async () => {
+    const sig = await signMessage({
       body: "Test",
       agentId: fakeAgentId,
       sentAt: 100,
     })
     expect(
-      verifySignature({
+      await verifySignature({
         body: "Test",
         agentId: fakeAgentId,
         sentAt: 200, // différent

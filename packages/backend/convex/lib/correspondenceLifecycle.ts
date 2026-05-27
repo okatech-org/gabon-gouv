@@ -322,7 +322,7 @@ export async function performCorrespondenceSend(
   const sender = await ctx.db.get(senderAgentId)
   if (!sender) throw new Error("Émetteur introuvable.")
 
-  // Import dynamique pour éviter le cycle d'import (smime.ts charge node:crypto)
+  // smime.ts utilise Web Crypto API (signMessage est async)
   const { signMessage } = await import("./smime.js")
 
   const now = Date.now()
@@ -331,7 +331,7 @@ export async function performCorrespondenceSend(
   const dueReplyAt = computeReplyDeadline(rule, now)
   const duaExpiresAt = computeDuaExpiresAt(rule, now)
 
-  const signature = signMessage({
+  const signature = await signMessage({
     body: correspondence.body,
     agentId: senderAgentId,
     sentAt: now,

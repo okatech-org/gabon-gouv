@@ -517,7 +517,7 @@ export const reply = mutation({
     }
 
     const now = Date.now()
-    const signature = signMessage({
+    const signature = await signMessage({
       body: args.body,
       agentId: me._id,
       sentAt: now,
