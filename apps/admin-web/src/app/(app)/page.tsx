@@ -80,14 +80,18 @@ export default async function AdminDashboardPage() {
   const session = await getCurrentAgent()
   if (!session) redirect("/login")
 
-  const [dashboard, onboardingStatus] = await Promise.all([
-    convex.query(api.admin.dashboard.getDashboard, {
+  // Le dashboard principal est obligatoire ; le banner premiers-pas est
+  // optionnel — si la query échoue (fonction pas encore déployée, perte
+  // de connexion, etc.), on dégrade gracieusement sans crasher la page.
+  const dashboard = (await convex.query(api.admin.dashboard.getDashboard, {
+    token: session.token,
+  })) as DashboardData
+
+  const onboardingStatus = await convex
+    .query(api.admin.onboarding.getOnboardingStatus, {
       token: session.token,
-    }) as Promise<DashboardData>,
-    convex.query(api.admin.onboarding.getOnboardingStatus, {
-      token: session.token,
-    }),
-  ])
+    })
+    .catch(() => null)
 
   const firstName = session.agent.name.split(" ")[0]
   const queuedKpi = dashboard.kpis.find((k) => k.label === "En file d'attente")?.value ?? "—"
