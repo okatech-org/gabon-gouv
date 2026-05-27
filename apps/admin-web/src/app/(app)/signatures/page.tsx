@@ -169,7 +169,8 @@ function EmptyState({ scope }: { scope: "pending" | "recent" }) {
   )
 }
 
-// Helpers ré-exportés pour usage dans les composants client (formatage)
-export { longDate, relativeTime }
-// (Re-export pour assurer le treeshake côté Next.js)
+// Note : longDate et relativeTime sont à importer depuis @/lib/format
+// directement dans les composants client. Pas de re-export ici car
+// Next.js App Router n'autorise que `default` + exports spécifiques
+// (metadata, generateStaticParams, etc.) dans les fichiers page.tsx.
 void Badge

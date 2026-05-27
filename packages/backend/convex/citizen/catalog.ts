@@ -65,6 +65,68 @@ export const getTopServices = query({
   },
 })
 
+/**
+ * Liste TOUS les services publiés du catalogue, regroupés par catégorie.
+ * Utilisée par la page `/services` côté citoyen (catalogue complet).
+ */
+export const listAllPublished = query({
+  args: {},
+  handler: async (ctx) => {
+    const [services, orgs, cats] = await Promise.all([
+      ctx.db.query("services").collect(),
+      ctx.db.query("organisms").collect(),
+      ctx.db.query("serviceCategories").collect(),
+    ])
+    cats.sort((a, b) => a.order - b.order)
+    const orgMap = new Map(orgs.map((o) => [o._id, o]))
+    const published = services.filter((s) => s.status === "published")
+
+    const byCategory = new Map<
+      string,
+      {
+        slug: string
+        title: string
+        organismShortName: string
+        organismName: string
+        delayHours: number
+        delayLabel: string
+        fee: string
+        online: boolean
+      }[]
+    >()
+    for (const s of published) {
+      const org = orgMap.get(s.organismId)
+      const arr = byCategory.get(s.categorySlug ?? "autre") ?? []
+      arr.push({
+        slug: s.slug,
+        title: s.title,
+        organismShortName: org?.shortName ?? org?.name ?? "—",
+        organismName: org?.name ?? "—",
+        delayHours: s.delayHours,
+        delayLabel: formatDelayHours(s.delayHours),
+        fee: s.fee,
+        online: s.online ?? s.deliveryMode === "online",
+      })
+      byCategory.set(s.categorySlug ?? "autre", arr)
+    }
+
+    return {
+      total: published.length,
+      categories: cats
+        .map((c) => ({
+          slug: c.slug,
+          label: c.label,
+          icon: c.icon,
+          color: c.color,
+          services: (byCategory.get(c.slug) ?? []).sort((a, b) =>
+            a.title.localeCompare(b.title),
+          ),
+        }))
+        .filter((c) => c.services.length > 0),
+    }
+  },
+})
+
 export const getServiceDetail = query({
   args: { slug: v.string() },
   handler: async (ctx, { slug }) => {
