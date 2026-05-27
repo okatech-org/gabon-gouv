@@ -1,14 +1,15 @@
+"use node"
+
 /**
  * Composant React-PDF générique « acte officiel » + helper de rendu.
  *
  * v1 — un seul layout pour tous les services. Le `payload` est libre.
  * On ajoutera des layouts par service.slug au fil de l'eau.
  *
- * Ce fichier est volontairement **séparé** de l'action Node : on garde
- * le composant et la fonction de rendu purs et testables.
- *
- * Note : pas de `"use node"` ici — c'est juste un module TSX. C'est
- * l'action qui l'importe qui doit déclarer `"use node"`.
+ * **`"use node"` requis** : `@react-pdf/renderer` charge transitivement
+ * `yoga-layout` qui utilise `import.meta` (non supporté en runtime V8
+ * Convex). Sans cette directive, le push backend échoue avec
+ * "Uncaught TypeError: import.meta unsupported".
  */
 
 import {

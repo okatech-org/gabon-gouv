@@ -22,8 +22,11 @@
  * l'action logge un warn et marque "skipped" (cas dev/test sans config).
  *
  * **Idempotence** : Digitalium est censé déduper sur `X-Event-Id = archiveId`.
- * Si on re-dispatch un archiveId déjà sent, le SAE renvoie 200 sans rien
- * faire — cf. la doc ADR-0021.
+ *
+ * **Architecture fichiers** : les queries/mutations associées
+ * (loadDispatchContext, markDispatched, markFailed, markSkipped) vivent dans
+ * `sae/dispatchHelpers.ts` (sans "use node") car Convex interdit les queries
+ * et mutations dans un module Node.
  */
 
 import { createHmac } from "node:crypto"
@@ -31,11 +34,7 @@ import { v } from "convex/values"
 import type { Id } from "../_generated/dataModel"
 import type { ActionCtx } from "../_generated/server"
 import { internal } from "../_generated/api"
-import {
-  action,
-  internalMutation,
-  internalQuery,
-} from "../_generated/server"
+import { internalAction } from "../_generated/server"
 
 const MAX_ATTEMPTS = 3
 const BACKOFF_SECONDS = [10, 60, 300]
@@ -55,87 +54,6 @@ interface DispatchPayload {
     sizeBytes?: number
   }
 }
-
-/* ============================================================
-   Queries / Mutations internes
-   ============================================================ */
-
-export const loadDispatchContext = internalQuery({
-  args: { archiveId: v.id("archives") },
-  handler: async (ctx, { archiveId }) => {
-    const archive = await ctx.db.get(archiveId)
-    if (!archive) return null
-    const organism = await ctx.db.get(archive.producerOrganismId)
-    return {
-      archive: {
-        _id: archive._id,
-        cote: archive.cote,
-        description: archive.description,
-        producerOrganismId: String(archive.producerOrganismId),
-        sha256: archive.sha256,
-        qualifiedTimestamp: archive.qualifiedTimestamp,
-        dua: archive.dua,
-        duaExpiresAt: archive.duaExpiresAt,
-        finalSort: archive.finalSort,
-        sizeBytes: archive.sizeBytes,
-        externalStatus: archive.externalStatus,
-        externalDispatchAttempts: archive.externalDispatchAttempts ?? 0,
-      },
-      organism: organism
-        ? {
-            saeConfig: organism.saeConfig,
-          }
-        : null,
-    }
-  },
-})
-
-export const markDispatched = internalMutation({
-  args: {
-    archiveId: v.id("archives"),
-    externalSaeId: v.string(),
-  },
-  handler: async (ctx, { archiveId, externalSaeId }) => {
-    await ctx.db.patch(archiveId, {
-      externalSaeId,
-      externalStatus: "dispatched",
-      externalStatusUpdatedAt: Date.now(),
-      externalLastError: undefined,
-    })
-  },
-})
-
-export const markFailed = internalMutation({
-  args: {
-    archiveId: v.id("archives"),
-    error: v.string(),
-    nextAttempts: v.number(),
-    finalize: v.boolean(),
-  },
-  handler: async (ctx, { archiveId, error, nextAttempts, finalize }) => {
-    await ctx.db.patch(archiveId, {
-      externalStatus: finalize ? "failed" : "pending_dispatch",
-      externalStatusUpdatedAt: Date.now(),
-      externalDispatchAttempts: nextAttempts,
-      externalLastError: error.slice(0, 512),
-    })
-  },
-})
-
-export const markSkipped = internalMutation({
-  args: { archiveId: v.id("archives"), reason: v.string() },
-  handler: async (ctx, { archiveId, reason }) => {
-    await ctx.db.patch(archiveId, {
-      externalStatus: "skipped",
-      externalStatusUpdatedAt: Date.now(),
-      externalLastError: reason.slice(0, 512),
-    })
-  },
-})
-
-/* ============================================================
-   Action principale — dispatch HMAC réel
-   ============================================================ */
 
 interface DispatchContextResult {
   archive: {
@@ -169,11 +87,11 @@ interface DispatchResult {
   finalFailure?: boolean
 }
 
-export const toDigitalium = action({
+export const toDigitalium = internalAction({
   args: { archiveId: v.id("archives") },
   handler: async (ctx, { archiveId }): Promise<DispatchResult> => {
     const ctxData: DispatchContextResult | null = await ctx.runQuery(
-      internal.sae.dispatch.loadDispatchContext,
+      internal.sae.dispatchHelpers.loadDispatchContext,
       { archiveId },
     )
     if (!ctxData) return { skipped: true, reason: "archive_not_found" }
@@ -181,7 +99,6 @@ export const toDigitalium = action({
 
     const cfg = ctxData.organism.saeConfig
     if (cfg?.provider !== "digitalium") {
-      // Mauvais provider : on ne devrait pas être appelé ici
       return { skipped: true, reason: "wrong_provider" }
     }
 
@@ -195,8 +112,7 @@ export const toDigitalium = action({
     const connectorId = cfg.digitaliumConnectorId
 
     if (!secret || !baseUrl || !connectorId) {
-      // Config incomplète : on skip plutôt que de boucler en échec
-      await ctx.runMutation(internal.sae.dispatch.markSkipped, {
+      await ctx.runMutation(internal.sae.dispatchHelpers.markSkipped, {
         archiveId,
         reason: !secret
           ? "missing_env_DIGITALIUM_HMAC_SECRET"
@@ -207,7 +123,7 @@ export const toDigitalium = action({
 
     // Compose payload
     const payload: DispatchPayload = {
-      eventId: String(archiveId), // = X-Event-Id pour idempotence côté SAE
+      eventId: String(archiveId),
       occurredAt: Date.now(),
       archive: {
         cote: ctxData.archive.cote,
@@ -251,8 +167,7 @@ export const toDigitalium = action({
       const json = (await res.json().catch(() => ({}))) as {
         externalSaeId?: string
       }
-      // Si le SAE ne renvoie pas d'id, on stocke l'eventId comme fallback
-      await ctx.runMutation(internal.sae.dispatch.markDispatched, {
+      await ctx.runMutation(internal.sae.dispatchHelpers.markDispatched, {
         archiveId,
         externalSaeId: json.externalSaeId ?? payload.eventId,
       })
@@ -277,7 +192,7 @@ async function handleFailure(
   const nextAttempts = currentAttempts + 1
   const willRetry = nextAttempts < MAX_ATTEMPTS
 
-  await ctx.runMutation(internal.sae.dispatch.markFailed, {
+  await ctx.runMutation(internal.sae.dispatchHelpers.markFailed, {
     archiveId,
     error,
     nextAttempts,
@@ -286,13 +201,13 @@ async function handleFailure(
 
   if (willRetry) {
     const backoff = BACKOFF_SECONDS[currentAttempts] ?? 300
-    // Référence indirecte pour casser la dépendance circulaire de types
-    // (toDigitalium se réfère à lui-même via internal.sae.dispatch).
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const selfRef = (internal.sae.dispatch as any).toDigitalium as Parameters<
-      typeof ctx.scheduler.runAfter
-    >[1]
-    await ctx.scheduler.runAfter(backoff * 1000, selfRef, { archiveId })
+    // Délègue le scheduling à dispatchHelpers.scheduleRetry (V8) pour
+    // éviter de référencer dispatch.toDigitalium depuis dispatch.ts
+    // (circular dep que tsc strict de Convex ne savait pas résoudre).
+    await ctx.runMutation(internal.sae.dispatchHelpers.scheduleRetry, {
+      archiveId,
+      delaySeconds: backoff,
+    })
     return { retried: true }
   }
   return { retried: false, finalFailure: true }
