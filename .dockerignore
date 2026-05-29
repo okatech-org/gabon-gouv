@@ -1,0 +1,37 @@
+# Dépendances & sorties de build (reconstruites dans l'image)
+node_modules
+**/node_modules
+.next
+**/.next
+dist
+**/dist
+out
+**/out
+.turbo
+**/.turbo
+
+# Convex local
+.convex
+**/.convex
+
+# Env & secrets (jamais dans l'image ; injectés au runtime / build-args)
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Tests, docs, design — inutiles à l'image
+tests-e2e
+designs
+docs
+playwright.config.ts
+
+# Git / CI / IDE / OS
+.git
+.github
+.vscode
+.idea
+.DS_Store
+**/.DS_Store
+certificates
+*.log

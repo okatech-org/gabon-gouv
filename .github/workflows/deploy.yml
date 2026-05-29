@@ -1,0 +1,167 @@
+name: Deploy
+
+# Déploiement production sur push main, vers Google Cloud Run.
+# Ordre garanti : Convex d'abord, puis les apps — une app ne part JAMAIS si
+# le déploiement Convex a échoué (voir le `if:` de chaque job d'app).
+# Build des images via Cloud Build (pas de Docker sur le runner).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write # Workload Identity Federation (auth GCP sans clé)
+
+env:
+  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  GCP_REGION: ${{ vars.GCP_REGION }}
+  REGISTRY: ${{ vars.GCP_REGION }}-docker.pkg.dev
+  IMAGE_BASE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GCP_AR_REPO }}
+
+jobs:
+  # --- Détection des scopes modifiés (path-filtering) -----------------------
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      citizen: ${{ steps.filter.outputs.citizen }}
+      admin: ${{ steps.filter.outputs.admin }}
+      platform: ${{ steps.filter.outputs.platform }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            shared: &shared
+              - 'package.json'
+              - 'bun.lock'
+              - 'turbo.json'
+              - 'Dockerfile'
+              - 'cloudbuild.yaml'
+              - 'packages/ui/**'
+              - 'packages/tsconfig/**'
+            backend:
+              - 'packages/backend/**'
+            citizen:
+              - *shared
+              - 'packages/backend/**'
+              - 'apps/citizen-web/**'
+            admin:
+              - *shared
+              - 'packages/backend/**'
+              - 'apps/admin-web/**'
+            platform:
+              - *shared
+              - 'packages/backend/**'
+              - 'apps/platform-web/**'
+
+  # --- 1. BACKEND CONVEX — dépendance étroite -------------------------------
+  deploy-convex:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.17
+      - run: bun install --frozen-lockfile
+      - name: Tests backend (garde-fou bloquant)
+        run: bun run --filter=@workspace/backend test:once
+      - name: Convex deploy (prod)
+        working-directory: packages/backend
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+        run: bunx convex deploy --yes
+
+  # --- 2. CITIZEN-WEB -------------------------------------------------------
+  deploy-citizen:
+    needs: [changes, deploy-convex]
+    if: >-
+      always() &&
+      needs.changes.outputs.citizen == 'true' &&
+      needs.deploy-convex.result != 'failure' &&
+      needs.deploy-convex.result != 'cancelled'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Build image (Cloud Build)
+        run: |
+          gcloud builds submit --config=cloudbuild.yaml --project="$GCP_PROJECT_ID" \
+            --substitutions=_APP=citizen-web,_IMAGE="$IMAGE_BASE/citizen-web",_TAG="${{ github.sha }}",_CONVEX_URL="${{ vars.NEXT_PUBLIC_CONVEX_URL }}",_AUTH_URL="${{ vars.NEXT_PUBLIC_BETTER_AUTH_URL }}",_CITIZEN_URL="${{ vars.NEXT_PUBLIC_CITIZEN_WEB_URL }}"
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "${{ vars.CLOUD_RUN_SERVICE_CITIZEN }}" \
+            --image="$IMAGE_BASE/citizen-web:${{ github.sha }}" \
+            --region="$GCP_REGION" --project="$GCP_PROJECT_ID" \
+            --service-account="${{ vars.GCP_RUNTIME_SA }}" \
+            --allow-unauthenticated \
+            --set-env-vars=BETTER_AUTH_URL="${{ vars.BETTER_AUTH_URL }}",CITIZEN_AUTH_ISSUER="${{ vars.CITIZEN_AUTH_ISSUER }}" \
+            --set-secrets=BETTER_AUTH_SECRET=gouv-BETTER_AUTH_SECRET:latest,CITIZEN_JWT_JWK=gouv-CITIZEN_JWT_JWK:latest,IDN_CLIENT_ID=gouv-IDN_CLIENT_ID:latest,IDN_CLIENT_SECRET=gouv-IDN_CLIENT_SECRET:latest
+
+  # --- 3. ADMIN-WEB ---------------------------------------------------------
+  deploy-admin:
+    needs: [changes, deploy-convex]
+    if: >-
+      always() &&
+      needs.changes.outputs.admin == 'true' &&
+      needs.deploy-convex.result != 'failure' &&
+      needs.deploy-convex.result != 'cancelled'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Build image (Cloud Build)
+        run: |
+          gcloud builds submit --config=cloudbuild.yaml --project="$GCP_PROJECT_ID" \
+            --substitutions=_APP=admin-web,_IMAGE="$IMAGE_BASE/admin-web",_TAG="${{ github.sha }}",_CONVEX_URL="${{ vars.NEXT_PUBLIC_CONVEX_URL }}"
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "${{ vars.CLOUD_RUN_SERVICE_ADMIN }}" \
+            --image="$IMAGE_BASE/admin-web:${{ github.sha }}" \
+            --region="$GCP_REGION" --project="$GCP_PROJECT_ID" \
+            --service-account="${{ vars.GCP_RUNTIME_SA }}" \
+            --allow-unauthenticated
+
+  # --- 4. PLATFORM-WEB ------------------------------------------------------
+  deploy-platform:
+    needs: [changes, deploy-convex]
+    if: >-
+      always() &&
+      needs.changes.outputs.platform == 'true' &&
+      needs.deploy-convex.result != 'failure' &&
+      needs.deploy-convex.result != 'cancelled'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Build image (Cloud Build)
+        run: |
+          gcloud builds submit --config=cloudbuild.yaml --project="$GCP_PROJECT_ID" \
+            --substitutions=_APP=platform-web,_IMAGE="$IMAGE_BASE/platform-web",_TAG="${{ github.sha }}",_CONVEX_URL="${{ vars.NEXT_PUBLIC_CONVEX_URL }}"
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "${{ vars.CLOUD_RUN_SERVICE_PLATFORM }}" \
+            --image="$IMAGE_BASE/platform-web:${{ github.sha }}" \
+            --region="$GCP_REGION" --project="$GCP_PROJECT_ID" \
+            --service-account="${{ vars.GCP_RUNTIME_SA }}" \
+            --allow-unauthenticated

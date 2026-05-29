@@ -1,0 +1,29 @@
+# Build d'UNE app Gabon Connect via Cloud Build (sans Docker local).
+# Substitutions :
+#   _APP          citizen-web | admin-web | platform-web
+#   _IMAGE        base de l'image (sans tag) dans Artifact Registry
+#   _TAG          tag immuable (ex. SHA git court)
+#   _CONVEX_URL   NEXT_PUBLIC_CONVEX_URL (inlinée au build)
+#   _AUTH_URL     NEXT_PUBLIC_BETTER_AUTH_URL (citizen ; vide ailleurs)
+#   _CITIZEN_URL  NEXT_PUBLIC_CITIZEN_WEB_URL (citizen ; vide ailleurs)
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --build-arg=APP=${_APP}
+      - --build-arg=NEXT_PUBLIC_CONVEX_URL=${_CONVEX_URL}
+      - --build-arg=NEXT_PUBLIC_BETTER_AUTH_URL=${_AUTH_URL}
+      - --build-arg=NEXT_PUBLIC_CITIZEN_WEB_URL=${_CITIZEN_URL}
+      - -t=${_IMAGE}:${_TAG}
+      - -t=${_IMAGE}:latest
+      - .
+images:
+  - ${_IMAGE}:${_TAG}
+  - ${_IMAGE}:latest
+options:
+  machineType: E2_HIGHCPU_8
+  logging: CLOUD_LOGGING_ONLY
+substitutions:
+  _AUTH_URL: ""
+  _CITIZEN_URL: ""
+timeout: 1800s
