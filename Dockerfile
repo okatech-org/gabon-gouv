@@ -12,30 +12,17 @@
 # APP doit valoir : citizen-web | admin-web | platform-web
 
 # ---------------------------------------------------------------------------
-# 1. Dépendances — on installe tout le graphe workspace (bun + lockfile gelé).
-#    On ne copie que les package.json pour maximiser le cache de couche.
-# ---------------------------------------------------------------------------
-FROM oven/bun:1.2.17 AS deps
-WORKDIR /repo
-COPY package.json bun.lock ./
-COPY apps/citizen-web/package.json apps/citizen-web/package.json
-COPY apps/admin-web/package.json apps/admin-web/package.json
-COPY apps/platform-web/package.json apps/platform-web/package.json
-COPY packages/ui/package.json packages/ui/package.json
-COPY packages/backend/package.json packages/backend/package.json
-COPY packages/tsconfig/package.json packages/tsconfig/package.json
-RUN bun install --frozen-lockfile
-
-# ---------------------------------------------------------------------------
-# 2. Build — turbo construit uniquement l'app ciblée (et ses deps internes).
-#    Les variables NEXT_PUBLIC_* sont inlinées au BUILD : on les passe en
-#    build-args (sinon elles seront vides dans le bundle client).
+# 1. Build — install du graphe workspace complet puis turbo build de l'app.
+#    On copie tout le contexte (le .dockerignore exclut node_modules/.next) :
+#    robuste à l'ajout/retrait d'un package workspace. En CI (Cloud Build sans
+#    cache inter-run) une étape `deps` séparée n'apporterait aucun gain.
+#    Les variables NEXT_PUBLIC_* sont inlinées au BUILD : passées en build-args.
 # ---------------------------------------------------------------------------
 FROM oven/bun:1.2.17 AS builder
 ARG APP
 WORKDIR /repo
-COPY --from=deps /repo/node_modules ./node_modules
 COPY . .
+RUN bun install --frozen-lockfile
 
 ARG NEXT_PUBLIC_CONVEX_URL
 ARG NEXT_PUBLIC_BETTER_AUTH_URL
