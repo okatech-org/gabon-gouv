@@ -9,11 +9,10 @@ import { NextResponse, type NextRequest } from "next/server"
  * middleware, et le vrai contrôle se fait dans `requireCurrentSession()`
  * côté server component.
  */
-// On laisse passer si une session existe sous l'une de ces formes :
-//   - better-auth (OIDC identité.ga) : cookies préfixés `better-auth`
-//   - NIP fallback (sandbox) : cookie `gc_citizen_nip`
-const SESSION_COOKIE_NAMES = ["gc_citizen_nip"]
-const SESSION_COOKIE_PREFIXES = ["better-auth"]
+// On laisse passer si une session better-auth (OIDC identité.ga) existe :
+// cookies préfixés `better-auth` ou `__Secure-better-auth` (HTTPS prod).
+const SESSION_COOKIE_NAMES: string[] = []
+const SESSION_COOKIE_PREFIXES = ["better-auth", "__Secure-better-auth"]
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl

@@ -13,8 +13,13 @@
 import { httpRouter } from "convex/server"
 import { httpAction } from "./_generated/server"
 import { api } from "./_generated/api"
+import { authComponent, createAuth } from "./citizenAuth"
 
 const http = httpRouter()
+
+// Routes Better Auth (auth citoyen OIDC) — sign-in, callback OAuth, JWKS,
+// token Convex, etc. exposées sous `/api/auth/*` du domaine HTTP Convex.
+authComponent.registerRoutes(http, createAuth)
 
 /**
  * GET /verify/:code

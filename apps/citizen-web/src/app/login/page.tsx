@@ -1,6 +1,5 @@
 import { Frame, Logo, RepublicBar } from "@workspace/ui"
 import { LoginButton } from "./login-button"
-import { LoginNipForm } from "./login-nip-form"
 
 export const metadata = {
   title: "Connexion · Gabon Connect",
@@ -169,30 +168,6 @@ export default async function CitizenLoginPage({ searchParams }: PageProps) {
                   Créez-en une sur identité.ga
                 </a>
                 .
-              </div>
-
-              {/* Voie de secours NIP — tant que l'OIDC sandbox n'est pas
-                  pleinement utilisable. À désactiver en prod. */}
-              <div
-                style={{
-                  marginTop: 12,
-                  paddingTop: 16,
-                  borderTop: "1px dashed var(--ink-250, var(--ink-200))",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    letterSpacing: "0.06em",
-                    textTransform: "uppercase",
-                    color: "var(--ink-500)",
-                    marginBottom: 8,
-                  }}
-                >
-                  Alternative démo
-                </div>
-                <LoginNipForm />
               </div>
             </div>
           </div>

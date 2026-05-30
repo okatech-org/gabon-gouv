@@ -99,16 +99,20 @@ jobs:
       - name: Build image (Cloud Build)
         run: |
           gcloud builds submit --config=cloudbuild.yaml --project="$GCP_PROJECT_ID" \
-            --substitutions=_APP=citizen-web,_IMAGE="$IMAGE_BASE/citizen-web",_TAG="${{ github.sha }}",_CONVEX_URL="${{ vars.NEXT_PUBLIC_CONVEX_URL }}",_AUTH_URL="${{ vars.NEXT_PUBLIC_BETTER_AUTH_URL }}",_CITIZEN_URL="${{ vars.NEXT_PUBLIC_CITIZEN_WEB_URL }}"
+            --substitutions=_APP=citizen-web,_IMAGE="$IMAGE_BASE/citizen-web",_TAG="${{ github.sha }}",_CONVEX_URL="${{ vars.NEXT_PUBLIC_CONVEX_URL }}",_CONVEX_SITE_URL="${{ vars.NEXT_PUBLIC_CONVEX_SITE_URL }}",_AUTH_URL="${{ vars.NEXT_PUBLIC_BETTER_AUTH_URL }}",_CITIZEN_URL="${{ vars.NEXT_PUBLIC_CITIZEN_WEB_URL }}"
       - name: Deploy to Cloud Run
+        # NB : depuis la migration @convex-dev/better-auth, Better Auth tourne
+        # DANS Convex. Les secrets OIDC (IDN_CLIENT_ID/SECRET), BETTER_AUTH_SECRET
+        # et SITE_URL vivent en env *Convex prod* (dashboard Convex ou
+        # `convex env set --prod`), plus sur Cloud Run. CITIZEN_AUTH_ISSUER et
+        # CITIZEN_JWT_JWK sont retirés (pont JWT maison supprimé).
         run: |
           gcloud run deploy "${{ vars.CLOUD_RUN_SERVICE_CITIZEN }}" \
             --image="$IMAGE_BASE/citizen-web:${{ github.sha }}" \
             --region="$GCP_REGION" --project="$GCP_PROJECT_ID" \
             --service-account="${{ vars.GCP_RUNTIME_SA }}" \
             --allow-unauthenticated \
-            --set-env-vars=BETTER_AUTH_URL="${{ vars.BETTER_AUTH_URL }}",CITIZEN_AUTH_ISSUER="${{ vars.CITIZEN_AUTH_ISSUER }}" \
-            --set-secrets=BETTER_AUTH_SECRET=gouv-BETTER_AUTH_SECRET:latest,CITIZEN_JWT_JWK=gouv-CITIZEN_JWT_JWK:latest,IDN_CLIENT_ID=gouv-IDN_CLIENT_ID:latest,IDN_CLIENT_SECRET=gouv-IDN_CLIENT_SECRET:latest
+            --set-env-vars=BETTER_AUTH_URL="${{ vars.BETTER_AUTH_URL }}"
 
   # --- 3. ADMIN-WEB ---------------------------------------------------------
   deploy-admin:

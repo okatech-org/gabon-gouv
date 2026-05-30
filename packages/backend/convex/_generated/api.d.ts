@@ -42,6 +42,7 @@ import type * as citizen_messages from "../citizen/messages.js";
 import type * as citizen_profile from "../citizen/profile.js";
 import type * as citizen_requests from "../citizen/requests.js";
 import type * as citizen_uploads from "../citizen/uploads.js";
+import type * as citizenAuth from "../citizenAuth.js";
 import type * as health from "../health.js";
 import type * as http from "../http.js";
 import type * as lib_audit from "../lib/audit.js";
@@ -122,6 +123,7 @@ declare const fullApi: ApiFromModules<{
   "citizen/profile": typeof citizen_profile;
   "citizen/requests": typeof citizen_requests;
   "citizen/uploads": typeof citizen_uploads;
+  citizenAuth: typeof citizenAuth;
   health: typeof health;
   http: typeof http;
   "lib/audit": typeof lib_audit;
@@ -189,6 +191,7 @@ export declare const internal: FilterApi<
 >;
 
 export declare const components: {
+  betterAuth: import("@convex-dev/better-auth/_generated/component.js").ComponentApi<"betterAuth">;
   aggCitizensGlobal: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"aggCitizensGlobal">;
   aggRequestsGlobal: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"aggRequestsGlobal">;
   aggDocumentsGlobal: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"aggDocumentsGlobal">;

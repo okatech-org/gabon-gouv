@@ -1,49 +1,31 @@
 import "server-only"
-import { headers } from "next/headers"
 import { redirect } from "next/navigation"
-import { auth } from "./auth"
-import { getNipSessionSub } from "./nip-session"
+import { api } from "@workspace/backend/generated"
+import { fetchAuthQuery } from "./auth-server"
 
 export interface CitizenSession {
   idnSub: string
-  source: "idn" | "nip" // tracking pour le footer / les logs
+  source: "idn"
   email: string | null
   name: string | null
 }
 
 /**
- * Récupère la session courante côté server component. Deux sources possibles :
- *   1. Better-auth (OIDC identité.ga) — voie principale.
- *   2. Cookie NIP fallback (`gc_citizen_nip`) — voie de secours sandbox.
+ * Récupère la session citoyen courante côté server component, via Better Auth
+ * (OIDC identité.ga) exécuté dans Convex. La query `citizenAuth.getMe` renvoie
+ * le profil de l'utilisateur authentifié (ou `null` si non connecté).
  *
- * Renvoie `null` si aucune des deux ne matche.
+ * `idnSub` provient du champ `user.userId` Better Auth (= `sub` OIDC).
  */
 export async function getCurrentSession(): Promise<CitizenSession | null> {
-  // 1. Better-auth (IDN)
-  const session = await auth.api
-    .getSession({ headers: await headers() })
-    .catch(() => null)
-  if (session?.user) {
-    return {
-      idnSub: session.user.id,
-      source: "idn",
-      email: session.user.email ?? null,
-      name: session.user.name ?? null,
-    }
+  const me = await fetchAuthQuery(api.citizenAuth.getMe).catch(() => null)
+  if (!me || !me.idnSub) return null
+  return {
+    idnSub: me.idnSub,
+    source: "idn",
+    email: me.email ?? null,
+    name: me.name ?? null,
   }
-
-  // 2. Fallback NIP
-  const nipSub = await getNipSessionSub()
-  if (nipSub) {
-    return {
-      idnSub: nipSub,
-      source: "nip",
-      email: null,
-      name: null,
-    }
-  }
-
-  return null
 }
 
 /**

@@ -1,8 +1,9 @@
-import { toNextJsHandler } from "better-auth/next-js"
-import { auth } from "@/lib/auth"
+import { handler } from "@/lib/auth-server"
 
 /**
- * Handler unique better-auth — gère sign-in, callback OAuth, sign-out,
- * get-session, etc. sous /api/auth/*.
+ * Proxy Better Auth — relaie `/api/auth/*` vers le domaine HTTP Convex où
+ * tourne le composant `@convex-dev/better-auth` (sign-in, callback OAuth,
+ * sign-out, JWKS, token Convex…). Le `redirect_uri` OIDC reste donc sur le
+ * domaine de l'app (`{BETTER_AUTH_URL}/api/auth/oauth2/callback/idn`).
  */
-export const { GET, POST } = toNextJsHandler(auth)
+export const { GET, POST } = handler

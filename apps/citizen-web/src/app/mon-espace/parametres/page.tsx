@@ -144,7 +144,7 @@ export default async function CitizenParametresPage() {
                 d&apos;inactivité.
               </div>
             </div>
-            <SignOutButton source={session.source} />
+            <SignOutButton />
           </div>
         </Card>
 

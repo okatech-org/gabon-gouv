@@ -1,5 +1,6 @@
 import { defineApp } from "convex/server"
 import aggregate from "@convex-dev/aggregate/convex.config"
+import betterAuth from "@convex-dev/better-auth/convex.config"
 
 /**
  * Composants Convex utilisés par le backend (ADR-0007).
@@ -13,6 +14,10 @@ import aggregate from "@convex-dev/aggregate/convex.config"
  */
 
 const app = defineApp()
+
+// Auth citoyen — Better Auth (OIDC identité.ga) persisté dans Convex.
+// Tables user/session/account/verification/jwks vivent dans ce composant.
+app.use(betterAuth)
 
 // Globaux (pas de namespace) — un seul arbre
 app.use(aggregate, { name: "aggCitizensGlobal" })

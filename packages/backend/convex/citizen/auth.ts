@@ -1,14 +1,32 @@
-import { v } from "convex/values"
 import type { MutationCtx, QueryCtx } from "../_generated/server"
-import { mutation } from "../lib/triggers"
 import type { Doc } from "../_generated/dataModel"
 import { actorFromCitizen, type Actor } from "../lib/permissions"
 
 /**
- * Résolution du citoyen courant depuis le `sub` de l'IDP (citoyen.ga).
+ * Identité du citoyen courant, dérivée côté serveur (cf. CLAUDE.md règle 2 —
+ * jamais d'identité en argument).
+ *
+ * L'auth citoyen passe par Better Auth dans Convex (`convex/citizenAuth.ts`).
+ * L'`idnSub` (le `sub` OIDC identité.ga) est exposé comme claim `idnSub` du JWT
+ * Convex (cf. `definePayload`), et stocké dans `user.userId`. On le lit via
+ * `getUserIdentity()` ; repli sur `subject` (cas des tests / jetons sans claim).
+ *
+ * Renvoie `undefined` si la requête n'est pas authentifiée.
+ */
+async function currentIdnSub(
+  ctx: QueryCtx | MutationCtx,
+): Promise<string | undefined> {
+  const identity = await ctx.auth.getUserIdentity()
+  if (!identity) return undefined
+  const idnSub = (identity as { idnSub?: string }).idnSub
+  return idnSub ?? identity.subject
+}
+
+/**
+ * Résolution du citoyen courant depuis l'identité authentifiée (JWT).
  *
  * Policy : strict, pas d'auto-création. Si aucune ligne `citizens` ne porte
- * ce `idnSub`, on jette une erreur "compte non provisionné" — l'app appelante
+ * cet `idnSub`, on jette une erreur "compte non provisionné" — l'app appelante
  * (citizen-web) catch ce cas et affiche un écran d'attente de provisionning.
  *
  * Le mapping `sub → citizen` est manuel pour l'instant (renseigné au seed
@@ -16,10 +34,10 @@ import { actorFromCitizen, type Actor } from "../lib/permissions"
  */
 export async function requireCitizen(
   ctx: QueryCtx | MutationCtx,
-  idnSub: string | undefined,
 ): Promise<{ citizen: Doc<"citizens">; actor: Actor }> {
+  const idnSub = await currentIdnSub(ctx)
   if (!idnSub) {
-    throw new Error("Authentification requise — aucun sub IDN fourni.")
+    throw new Error("Authentification requise — identité non vérifiée.")
   }
   const citizen = await ctx.db
     .query("citizens")
@@ -34,60 +52,17 @@ export async function requireCitizen(
 }
 
 /**
- * Variante lecture seule : renvoie `null` si non provisionné au lieu de
- * throw. Utile pour les pages publiques qui veulent afficher le nom si
- * connecté, sans casser si le compte n'existe pas encore.
+ * Variante lecture seule : renvoie `null` si non authentifié ou non
+ * provisionné au lieu de throw. Utile pour les pages publiques qui veulent
+ * afficher le nom si connecté, sans casser si le compte n'existe pas encore.
  */
 export async function tryGetCitizen(
   ctx: QueryCtx | MutationCtx,
-  idnSub: string | undefined,
 ): Promise<Doc<"citizens"> | null> {
+  const idnSub = await currentIdnSub(ctx)
   if (!idnSub) return null
   return ctx.db
     .query("citizens")
     .withIndex("by_idn_sub", (q) => q.eq("idnSub", idnSub))
     .unique()
 }
-
-const SESSION_TTL_MS = 12 * 60 * 60 * 1000 // 12 h, identique aux agents
-
-/**
- * Connexion alternative par NIP — chemin de secours tant que l'intégration
- * OIDC identité.ga n'est pas finalisée. Lookup le citoyen par NIP, renvoie
- * son `idnSub` (et le génère si manquant) pour que les queries citoyen
- * existantes (qui prennent `idnSub`) continuent à fonctionner sans modif.
- *
- * Le résultat est stocké en cookie httpOnly côté Next.js (`gc_citizen_nip`).
- *
- * À retirer ou désactiver en prod quand IDN sera fluide.
- */
-export const signInCitizenWithNip = mutation({
-  args: { nip: v.string() },
-  handler: async (ctx, { nip }) => {
-    const normalized = nip.replace(/\s+/g, "")
-    const citizen = await ctx.db
-      .query("citizens")
-      .withIndex("by_nip", (q) => q.eq("nip", normalized))
-      .unique()
-    if (!citizen) {
-      throw new Error(
-        "NIP inconnu — aucun citoyen associé à ce numéro d'identité.",
-      )
-    }
-
-    // Si le citoyen n'a pas encore d'idnSub (cas seed minimal), on en pose
-    // un synthétique stable basé sur son NIP pour que les queries continuent
-    // à lookup par `by_idn_sub`.
-    let idnSub = citizen.idnSub
-    if (!idnSub) {
-      idnSub = `nip:${normalized}`
-      await ctx.db.patch(citizen._id, { idnSub })
-    }
-
-    return {
-      idnSub,
-      name: citizen.name,
-      expiresAt: Date.now() + SESSION_TTL_MS,
-    }
-  },
-})
