@@ -1,15 +1,14 @@
 import Link from "next/link"
 import { Badge, Card, Icon, PageHeader, SectionHeading } from "@workspace/ui"
 import { api } from "@workspace/backend/generated"
-import { convex } from "@/lib/convex"
+import { getCitizenConvex } from "@/lib/convex"
 import { requireCurrentSession } from "@/lib/current-citizen"
 import { EditableContactForm } from "./editable-contact-form"
 
 export default async function CitizenProfilPage() {
   const session = await requireCurrentSession()
-  const profile = await convex.query(api.citizen.profile.getMyProfile, {
-    idnSub: session.idnSub,
-  })
+  const convex = await getCitizenConvex(session)
+  const profile = await convex.query(api.citizen.profile.getMyProfile, {})
 
   const readonlyFields: Array<[string, string]> = [
     ["NIP", profile.readonly.nip],

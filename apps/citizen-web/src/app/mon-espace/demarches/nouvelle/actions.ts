@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import { api } from "@workspace/backend/generated"
-import { convex } from "@/lib/convex"
+import { getCitizenConvex } from "@/lib/convex"
 import { requireCurrentSession } from "@/lib/current-citizen"
 
 /* ============================================================
@@ -88,10 +88,9 @@ const asId = (s: string) => s as unknown as never
 
 export async function getUploadUrlAction(): Promise<UploadUrlResult> {
   const session = await requireCurrentSession()
+  const convex = await getCitizenConvex(session)
   try {
-    const url = await convex.mutation(api.citizen.uploads.generateUploadUrl, {
-      idnSub: session.idnSub,
-    })
+    const url = await convex.mutation(api.citizen.uploads.generateUploadUrl, {})
     return { ok: true, url }
   } catch (error) {
     return { ok: false, message: extractFriendlyMessage(error) }
@@ -102,9 +101,9 @@ export async function attachPieceAction(
   args: AttachPieceArgs,
 ): Promise<AttachPieceResult> {
   const session = await requireCurrentSession()
+  const convex = await getCitizenConvex(session)
   try {
     const res = await convex.mutation(api.citizen.uploads.attachPiece, {
-      idnSub: session.idnSub,
       storageId: asId(args.storageId),
       label: args.label,
       filename: args.filename,
@@ -123,9 +122,9 @@ export async function removePieceAction(
   pieceId: string,
 ): Promise<RemovePieceResult> {
   const session = await requireCurrentSession()
+  const convex = await getCitizenConvex(session)
   try {
     await convex.mutation(api.citizen.uploads.removePiece, {
-      idnSub: session.idnSub,
       pieceId: asId(pieceId),
     })
     return { ok: true }
@@ -140,9 +139,9 @@ export async function removePieceAction(
 
 export async function saveDraftAction(args: SaveDraftArgs): Promise<{ ok: boolean; message?: string }> {
   const session = await requireCurrentSession()
+  const convex = await getCitizenConvex(session)
   try {
     await convex.mutation(api.citizen.drafts.saveDraft, {
-      idnSub: session.idnSub,
       serviceId: asId(args.serviceId),
       serviceVariantId: args.serviceVariantId
         ? asId(args.serviceVariantId)
@@ -164,10 +163,10 @@ export async function submitDepositAction(
   args: SubmitArgs,
 ): Promise<SubmitResult> {
   const session = await requireCurrentSession()
+  const convex = await getCitizenConvex(session)
   let res: { ref: string }
   try {
     res = await convex.mutation(api.citizen.requests.submitRequest, {
-      idnSub: session.idnSub,
       serviceSlug: args.serviceSlug,
       variantKey: args.variantKey,
       numberOfCopies: args.numberOfCopies,

@@ -22,11 +22,11 @@ import { pieceDocTypeValidator } from "../lib/enums"
    generateUploadUrl — URL d'upload single-use Convex storage
    ============================================================ */
 export const generateUploadUrl = mutation({
-  args: { idnSub: v.string() },
-  handler: async (ctx, { idnSub }) => {
+  args: {},
+  handler: async (ctx) => {
     // Vérifie que le citoyen est authentifié avant de générer une URL
     // (sinon n'importe qui pourrait uploader sur notre storage).
-    await requireCitizen(ctx, idnSub)
+    await requireCitizen(ctx)
     return await ctx.storage.generateUploadUrl()
   },
 })
@@ -36,7 +36,6 @@ export const generateUploadUrl = mutation({
    ============================================================ */
 export const attachPiece = mutation({
   args: {
-    idnSub: v.string(),
     storageId: v.id("_storage"),
     label: v.string(),
     filename: v.string(),
@@ -47,7 +46,7 @@ export const attachPiece = mutation({
     required: v.boolean(),
   },
   handler: async (ctx, args) => {
-    const { citizen } = await requireCitizen(ctx, args.idnSub)
+    const { citizen } = await requireCitizen(ctx)
 
     // Validation basique : taille (max 10 Mo), mime (PDF/JPG/PNG)
     if (args.sizeBytes > 10 * 1024 * 1024) {
@@ -98,9 +97,9 @@ export const attachPiece = mutation({
    removePiece — annulation avant submit
    ============================================================ */
 export const removePiece = mutation({
-  args: { idnSub: v.string(), pieceId: v.id("pieces") },
-  handler: async (ctx, { idnSub, pieceId }) => {
-    const { citizen } = await requireCitizen(ctx, idnSub)
+  args: { pieceId: v.id("pieces") },
+  handler: async (ctx, { pieceId }) => {
+    const { citizen } = await requireCitizen(ctx)
     const piece = await ctx.db.get(pieceId)
     if (!piece) return // idempotent
 

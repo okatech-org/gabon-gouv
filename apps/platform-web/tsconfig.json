@@ -11,12 +11,6 @@
       "@workspace/ui/*": [
         "../../packages/ui/src/*"
       ],
-      "@workspace/mocks": [
-        "../../packages/mocks/src"
-      ],
-      "@workspace/mocks/*": [
-        "../../packages/mocks/src/*"
-      ],
       "@workspace/backend/generated": [
         "../../packages/backend/convex/_generated/api"
       ]

@@ -73,6 +73,7 @@ export const servicesTables = {
     avgDelayHours: v.optional(v.number()),
   })
     .index("by_slug", ["slug"])
+    .index("by_status", ["status"]) // catalogue public : ne scanner que les publiés
     .index("by_organism_status", ["organismId", "status"])
     .index("by_category", ["categorySlug"])
     .index("by_organism_updatedAt", ["organismId"]) // tri par _creationTime descendant

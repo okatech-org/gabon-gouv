@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { api } from "@workspace/backend/generated"
-import { convex } from "@/lib/convex"
+import { getCitizenConvex } from "@/lib/convex"
 import { requireCurrentSession } from "@/lib/current-citizen"
 
 export interface UpdateProfileResult {
@@ -40,6 +40,7 @@ export async function updateProfileAction(
   formData: FormData,
 ): Promise<UpdateProfileResult> {
   const session = await requireCurrentSession()
+  const convex = await getCitizenConvex(session)
   const email = String(formData.get("email") ?? "").trim()
   const phone = String(formData.get("phone") ?? "").trim()
   const address = String(formData.get("address") ?? "").trim()
@@ -50,7 +51,6 @@ export async function updateProfileAction(
 
   try {
     await convex.mutation(api.citizen.profile.updateMyProfile, {
-      idnSub: session.idnSub,
       email,
       phone,
       address,

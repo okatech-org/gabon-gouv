@@ -14,14 +14,13 @@ import {
   type IconName,
 } from "@workspace/ui"
 import { api } from "@workspace/backend/generated"
-import { convex } from "@/lib/convex"
+import { getCitizenConvex } from "@/lib/convex"
 import { requireCurrentSession } from "@/lib/current-citizen"
 
 export default async function CitizenDossierPage() {
   const session = await requireCurrentSession()
-  const data = await convex.query(api.citizen.dossier.getMyDossier, {
-    idnSub: session.idnSub,
-  })
+  const convex = await getCitizenConvex(session)
+  const data = await convex.query(api.citizen.dossier.getMyDossier, {})
   const { profile, relations, registryEntries, grants, counts } = data
 
   const identityFields: Array<[string, string]> = [

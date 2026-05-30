@@ -9,7 +9,7 @@ import { assertCan } from "../lib/permissions"
 /**
  * Cycle citoyen d'une demande : dépôt, suivi, annulation, messages.
  *
- * Toutes les mutations passent par `requireCitizen(idnSub)` et vérifient
+ * Toutes les mutations passent par `requireCitizen(ctx)` et vérifient
  * la propriété de la demande via `assertCan(actor, "request.read.own"/
  * "request.deposit"/"request.cancel")`.
  */
@@ -19,9 +19,9 @@ import { assertCan } from "../lib/permissions"
  * Sert la page /mon-espace/demarches (vue liste).
  */
 export const listMyRequests = query({
-  args: { idnSub: v.string() },
-  handler: async (ctx, { idnSub }) => {
-    const { citizen } = await requireCitizen(ctx, idnSub)
+  args: {},
+  handler: async (ctx) => {
+    const { citizen } = await requireCitizen(ctx)
     const requests = await ctx.db
       .query("requests")
       .withIndex("by_citizen", (q) => q.eq("citizenId", citizen._id))
@@ -103,9 +103,9 @@ export const listMyRequests = query({
 })
 
 export const getMyRequest = query({
-  args: { idnSub: v.string(), ref: v.string() },
-  handler: async (ctx, { idnSub, ref }) => {
-    const { citizen } = await requireCitizen(ctx, idnSub)
+  args: { ref: v.string() },
+  handler: async (ctx, { ref }) => {
+    const { citizen } = await requireCitizen(ctx)
     const request = await ctx.db
       .query("requests")
       .withIndex("by_ref", (q) => q.eq("ref", ref))
@@ -186,7 +186,6 @@ export const getMyRequest = query({
 
 export const submitRequest = mutation({
   args: {
-    idnSub: v.string(),
     serviceSlug: v.string(),
     variantKey: v.optional(v.string()),
     numberOfCopies: v.optional(v.number()),
@@ -206,7 +205,7 @@ export const submitRequest = mutation({
     }),
   },
   handler: async (ctx, args) => {
-    const { citizen, actor } = await requireCitizen(ctx, args.idnSub)
+    const { citizen, actor } = await requireCitizen(ctx)
     assertCan(actor, "request.deposit")
 
     if (!args.consents.honor || !args.consents.rgpd) {
@@ -332,9 +331,9 @@ export const submitRequest = mutation({
  * Vérifie que la demande appartient bien au citoyen courant.
  */
 export const getMyDocumentPdfUrl = query({
-  args: { idnSub: v.string(), ref: v.string() },
-  handler: async (ctx, { idnSub, ref }) => {
-    const { citizen } = await requireCitizen(ctx, idnSub)
+  args: { ref: v.string() },
+  handler: async (ctx, { ref }) => {
+    const { citizen } = await requireCitizen(ctx)
     const request = await ctx.db
       .query("requests")
       .withIndex("by_ref", (q) => q.eq("ref", ref))
@@ -360,9 +359,9 @@ export const getMyDocumentPdfUrl = query({
 })
 
 export const cancelMyRequest = mutation({
-  args: { idnSub: v.string(), ref: v.string(), reason: v.optional(v.string()) },
-  handler: async (ctx, { idnSub, ref, reason }) => {
-    const { citizen, actor } = await requireCitizen(ctx, idnSub)
+  args: { ref: v.string(), reason: v.optional(v.string()) },
+  handler: async (ctx, { ref, reason }) => {
+    const { citizen, actor } = await requireCitizen(ctx)
     assertCan(actor, "request.cancel")
 
     const request = await ctx.db
@@ -397,9 +396,9 @@ export const cancelMyRequest = mutation({
 })
 
 export const sendMessageToOrganism = mutation({
-  args: { idnSub: v.string(), ref: v.string(), body: v.string() },
-  handler: async (ctx, { idnSub, ref, body }) => {
-    const { citizen } = await requireCitizen(ctx, idnSub)
+  args: { ref: v.string(), body: v.string() },
+  handler: async (ctx, { ref, body }) => {
+    const { citizen } = await requireCitizen(ctx)
     const trimmed = body.trim()
     if (!trimmed) throw new Error("Le message est vide.")
 

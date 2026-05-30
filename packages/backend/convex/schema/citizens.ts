@@ -19,6 +19,8 @@ export const citizensTables = {
     // Subject identifier de l'IDP Identité Numérique Gabonaise (citoyen.ga).
     // Renseigné au premier login OIDC (provisioning manuel pour l'instant).
     // Optionnel : un citoyen seedé sans idnSub ne peut pas se connecter.
+    // Colonne de stockage (clé d'index by_idn_sub), pas un argument d'autorisation.
+    // eslint-disable-next-line no-restricted-syntax
     idnSub: v.optional(v.string()),
     name: v.string(),
     email: v.optional(v.string()),

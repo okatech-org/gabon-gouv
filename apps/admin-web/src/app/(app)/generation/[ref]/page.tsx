@@ -11,7 +11,6 @@ import {
   Tabs,
 } from "@workspace/ui"
 import { api } from "@workspace/backend/generated"
-import { getTemplateVariables } from "@workspace/mocks/admin"
 import { convex } from "@/lib/convex"
 import { getCurrentAgent } from "@/lib/current-agent"
 import { GenerationActions } from "./generation-actions"
@@ -66,18 +65,38 @@ export default async function AdminGenerationPage({
   if (!session) redirect("/login")
 
   const { ref } = await params
-  const [instruction, variables] = await Promise.all([
-    convex.query(api.admin.requests.getInstruction, {
-      token: session.token,
-      ref,
-    }) as Promise<InstructionForGeneration | null>,
-    getTemplateVariables(),
-  ])
+  const instruction = (await convex.query(api.admin.requests.getInstruction, {
+    token: session.token,
+    ref,
+  })) as InstructionForGeneration | null
 
   if (!instruction) notFound()
 
   const citizen = instruction.citizen
   const serviceTitle = instruction.service?.title ?? "Acte"
+
+  // Variables auto-renseignées du template, dérivées des données réelles de la
+  // demande (état civil + registre) plutôt que d'un jeu de valeurs fictives.
+  const variables: Array<{ key: string; value: string; source: string }> = [
+    { key: "nom", value: citizen?.name ?? "—", source: "Demande" },
+    { key: "nip", value: citizen?.nip ?? "—", source: "Demande" },
+    {
+      key: "date_naissance",
+      value: citizen?.birthDate ?? "—",
+      source: "Registre",
+    },
+    {
+      key: "lieu_naissance",
+      value: citizen?.birthPlace ?? "—",
+      source: "Registre",
+    },
+    { key: "filiation", value: citizen?.parents ?? "—", source: "Registre" },
+    {
+      key: "numero_acte",
+      value: instruction.document?.actNumber ?? "À attribuer",
+      source: "Registre",
+    },
+  ]
 
   return (
     <>

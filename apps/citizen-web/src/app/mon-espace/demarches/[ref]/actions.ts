@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { api } from "@workspace/backend/generated"
-import { convex } from "@/lib/convex"
+import { getCitizenConvex } from "@/lib/convex"
 import { requireCurrentSession } from "@/lib/current-citizen"
 
 export interface ActionResult {
@@ -31,9 +31,9 @@ export async function cancelMyRequestAction(
   reason: string,
 ): Promise<ActionResult> {
   const session = await requireCurrentSession()
+  const convex = await getCitizenConvex(session)
   try {
     await convex.mutation(api.citizen.requests.cancelMyRequest, {
-      idnSub: session.idnSub,
       ref,
       reason: reason.trim() || undefined,
     })
@@ -60,9 +60,9 @@ export async function getMyPdfUrlAction(
   }
 > {
   const session = await requireCurrentSession()
+  const convex = await getCitizenConvex(session)
   try {
     const res = await convex.query(api.citizen.requests.getMyDocumentPdfUrl, {
-      idnSub: session.idnSub,
       ref,
     })
     if (!res) return { ok: true, url: null }
@@ -84,9 +84,9 @@ export async function sendMessageAction(
   const trimmed = body.trim()
   if (!trimmed) return { ok: false, message: "Le message est vide." }
   const session = await requireCurrentSession()
+  const convex = await getCitizenConvex(session)
   try {
     await convex.mutation(api.citizen.requests.sendMessageToOrganism, {
-      idnSub: session.idnSub,
       ref,
       body: trimmed,
     })

@@ -6,7 +6,7 @@ import {
   SectionHeading,
 } from "@workspace/ui"
 import { api } from "@workspace/backend/generated"
-import { convex } from "@/lib/convex"
+import { getCitizenConvex } from "@/lib/convex"
 import { requireCurrentSession } from "@/lib/current-citizen"
 
 const LOA_LABELS: Record<1 | 2 | 3, { label: string; description: string }> = {
@@ -47,9 +47,8 @@ const SOURCE_LABEL: Record<
 
 export default async function CitizenIdentitePage() {
   const session = await requireCurrentSession()
-  const data = await convex.query(api.citizen.identity.getMyIdentity, {
-    idnSub: session.idnSub,
-  })
+  const convex = await getCitizenConvex(session)
+  const data = await convex.query(api.citizen.identity.getMyIdentity, {})
 
   const loa = LOA_LABELS[data.estimatedLoa as 1 | 2 | 3]
   const source = SOURCE_LABEL[data.source] ?? SOURCE_LABEL.idn

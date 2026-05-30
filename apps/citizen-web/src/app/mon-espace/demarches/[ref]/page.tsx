@@ -11,7 +11,7 @@ import {
   type Tone,
 } from "@workspace/ui"
 import { api } from "@workspace/backend/generated"
-import { convex } from "@/lib/convex"
+import { getCitizenConvex } from "@/lib/convex"
 import { requireCurrentSession } from "@/lib/current-citizen"
 import { CancelRequestButton } from "./cancel-request-button"
 import { SendMessageBox } from "./send-message-box"
@@ -24,8 +24,8 @@ export default async function CitizenTrackingPage({
 }) {
   const { ref } = await params
   const session = await requireCurrentSession()
+  const convex = await getCitizenConvex(session)
   const tracking = await convex.query(api.citizen.requests.getMyRequest, {
-    idnSub: session.idnSub,
     ref,
   })
   if (!tracking) notFound()

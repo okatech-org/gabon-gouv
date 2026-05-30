@@ -9,7 +9,7 @@ import {
   type Tone,
 } from "@workspace/ui"
 import { api } from "@workspace/backend/generated"
-import { convex } from "@/lib/convex"
+import { getCitizenConvex } from "@/lib/convex"
 import { requireCurrentSession } from "@/lib/current-citizen"
 import { MarkReadButton } from "./mark-read-button"
 
@@ -32,9 +32,10 @@ export default async function CitizenMessagesPage({ searchParams }: PageProps) {
     "all") as FilterId
 
   const session = await requireCurrentSession()
+  const convex = await getCitizenConvex(session)
   const { messages, stats } = await convex.query(
     api.citizen.messages.listMyMessages,
-    { idnSub: session.idnSub },
+    {},
   )
 
   const filtered = messages.filter((m) => {

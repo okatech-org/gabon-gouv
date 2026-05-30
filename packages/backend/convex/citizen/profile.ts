@@ -11,9 +11,9 @@ import { requireCitizen } from "./auth"
  * d'acte rectificatif auprès de la DG État Civil.
  */
 export const getMyProfile = query({
-  args: { idnSub: v.string() },
-  handler: async (ctx, { idnSub }) => {
-    const { citizen } = await requireCitizen(ctx, idnSub)
+  args: {},
+  handler: async (ctx) => {
+    const { citizen } = await requireCitizen(ctx)
     return {
       // Lecture seule (identité civile)
       readonly: {
@@ -44,14 +44,13 @@ export const getMyProfile = query({
 
 export const updateMyProfile = mutation({
   args: {
-    idnSub: v.string(),
     email: v.optional(v.string()),
     phone: v.optional(v.string()),
     address: v.optional(v.string()),
     addressProvinceCode: v.optional(provinceCodeValidator),
   },
   handler: async (ctx, args) => {
-    const { citizen } = await requireCitizen(ctx, args.idnSub)
+    const { citizen } = await requireCitizen(ctx)
     const patch: Record<string, unknown> = {}
     if (args.email !== undefined) {
       const trimmed = args.email.trim().toLowerCase()

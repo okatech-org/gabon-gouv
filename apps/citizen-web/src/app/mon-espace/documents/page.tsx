@@ -10,7 +10,7 @@ import {
   TextInput,
 } from "@workspace/ui"
 import { api } from "@workspace/backend/generated"
-import { convex } from "@/lib/convex"
+import { getCitizenConvex } from "@/lib/convex"
 import { requireCurrentSession } from "@/lib/current-citizen"
 
 interface PageProps {
@@ -22,9 +22,10 @@ export default async function CitizenDocumentsListPage({
 }: PageProps) {
   const sp = await searchParams
   const session = await requireCurrentSession()
+  const convex = await getCitizenConvex(session)
   const { documents, stats, facets } = await convex.query(
     api.citizen.documents.listMyDocuments,
-    { idnSub: session.idnSub },
+    {},
   )
 
   const yearFilter = sp.annee ? Number(sp.annee) : null

@@ -1,4 +1,3 @@
-import { v } from "convex/values"
 import { query } from "../_generated/server"
 import { requireCitizen } from "./auth"
 
@@ -9,9 +8,9 @@ import { requireCitizen } from "./auth"
 const DAY_MS = 24 * 60 * 60 * 1000
 
 export const getDashboard = query({
-  args: { idnSub: v.string() },
-  handler: async (ctx, { idnSub }) => {
-    const { citizen } = await requireCitizen(ctx, idnSub)
+  args: {},
+  handler: async (ctx) => {
+    const { citizen } = await requireCitizen(ctx)
 
     // Mes demandes (toutes, triées récentes en premier)
     const requests = await ctx.db

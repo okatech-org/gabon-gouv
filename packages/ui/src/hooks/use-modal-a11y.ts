@@ -132,7 +132,6 @@ export function useModalA11y({
         el.removeAttribute("inert")
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // 1× au mount, cleanup au démontage
 }
 

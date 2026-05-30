@@ -178,11 +178,12 @@ async function buildFixture(): Promise<Fixture> {
 describe("submitRequest → vérifications stub", () => {
   test("insère 3 vérifications par défaut, identity=ok si identityVerified", async () => {
     const f = await buildFixture()
-    const res = await f.t.mutation(api.citizen.requests.submitRequest, {
-      idnSub: f.marieSub,
-      serviceSlug: "acte-naissance",
-      consents: { honor: true, rgpd: true },
-    })
+    const res = await f.t
+      .withIdentity({ subject: f.marieSub })
+      .mutation(api.citizen.requests.submitRequest, {
+        serviceSlug: "acte-naissance",
+        consents: { honor: true, rgpd: true },
+      })
 
     const verifs = await f.t.run((ctx) =>
       ctx.db
@@ -206,11 +207,12 @@ describe("submitRequest → vérifications stub", () => {
     const f = await buildFixture()
     // Patche Marie pour retirer identityVerified
     await f.t.run((ctx) => ctx.db.patch(f.citizenId, { identityVerified: false }))
-    const res = await f.t.mutation(api.citizen.requests.submitRequest, {
-      idnSub: f.marieSub,
-      serviceSlug: "acte-naissance",
-      consents: { honor: true, rgpd: true },
-    })
+    const res = await f.t
+      .withIdentity({ subject: f.marieSub })
+      .mutation(api.citizen.requests.submitRequest, {
+        serviceSlug: "acte-naissance",
+        consents: { honor: true, rgpd: true },
+      })
     const verifs = await f.t.run((ctx) =>
       ctx.db
         .query("verifications")
@@ -682,10 +684,11 @@ describe("getDocumentPdfUrl", () => {
     )
     void otherCitizen
     await expect(
-      f.t.query(api.citizen.requests.getMyDocumentPdfUrl, {
-        idnSub: "idn-other",
-        ref: f.ref, // ref de Marie
-      }),
+      f.t
+        .withIdentity({ subject: "idn-other" })
+        .query(api.citizen.requests.getMyDocumentPdfUrl, {
+          ref: f.ref, // ref de Marie
+        }),
     ).rejects.toThrowError(/appartient pas/)
   })
 })

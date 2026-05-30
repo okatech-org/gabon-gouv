@@ -8,17 +8,17 @@ import { requireCitizen } from "./auth"
  * indirectement le wizard de dépôt.
  */
 
-const TOP_SERVICES_HARDCODED_FALLBACK: Array<{ slug: string; categorySlug: string }> = []
-
 export const getCategories = query({
   args: {},
   handler: async (ctx) => {
     const cats = await ctx.db.query("serviceCategories").collect()
     cats.sort((a, b) => a.order - b.order)
-    const allServices = await ctx.db.query("services").collect()
+    const publishedServices = await ctx.db
+      .query("services")
+      .withIndex("by_status", (q) => q.eq("status", "published"))
+      .collect()
     const countBySlug = new Map<string, number>()
-    for (const s of allServices) {
-      if (s.status !== "published") continue
+    for (const s of publishedServices) {
       const k = s.categorySlug
       if (!k) continue
       countBySlug.set(k, (countBySlug.get(k) ?? 0) + 1)
@@ -36,8 +36,10 @@ export const getCategories = query({
 export const getTopServices = query({
   args: { limit: v.optional(v.number()) },
   handler: async (ctx, { limit = 6 }) => {
-    const services = await ctx.db.query("services").collect()
-    const published = services.filter((s) => s.status === "published")
+    const published = await ctx.db
+      .query("services")
+      .withIndex("by_status", (q) => q.eq("status", "published"))
+      .collect()
     // Tri par requestsLast30d desc puis par delayHours asc
     published.sort((a, b) => {
       const ra = a.requestsLast30d ?? 0
@@ -72,14 +74,16 @@ export const getTopServices = query({
 export const listAllPublished = query({
   args: {},
   handler: async (ctx) => {
-    const [services, orgs, cats] = await Promise.all([
-      ctx.db.query("services").collect(),
+    const [published, orgs, cats] = await Promise.all([
+      ctx.db
+        .query("services")
+        .withIndex("by_status", (q) => q.eq("status", "published"))
+        .collect(),
       ctx.db.query("organisms").collect(),
       ctx.db.query("serviceCategories").collect(),
     ])
     cats.sort((a, b) => a.order - b.order)
     const orgMap = new Map(orgs.map((o) => [o._id, o]))
-    const published = services.filter((s) => s.status === "published")
 
     const byCategory = new Map<
       string,
@@ -151,12 +155,14 @@ export const getServiceDetail = query({
 
     // Services proches (même catégorie, autres slugs)
     const related = (
-      await ctx.db.query("services").collect()
+      await ctx.db
+        .query("services")
+        .withIndex("by_status", (q) => q.eq("status", "published"))
+        .collect()
     )
       .filter(
         (s) =>
           s._id !== service._id &&
-          s.status === "published" &&
           (s.categorySlug === service.categorySlug ||
             s.category === service.category),
       )
@@ -205,20 +211,18 @@ export const getServiceDetail = query({
   },
 })
 
-void TOP_SERVICES_HARDCODED_FALLBACK
-
 /**
  * Query dédiée au wizard de dépôt : renvoie le service avec ses variantes
  * publiées, ses pièces requises (avec variantOverrides résolus par variante),
  * et les valeurs d'autofill pré-calculées depuis le profil du citoyen courant.
  *
- * Nécessite l'authentification citoyen (idnSub) — contrairement à
- * getServiceDetail qui est public — parce qu'on injecte des données personnelles.
+ * Nécessite l'authentification citoyen — contrairement à getServiceDetail qui
+ * est public — parce qu'on injecte des données personnelles.
  */
 export const getServiceForWizard = query({
-  args: { idnSub: v.string(), slug: v.string() },
-  handler: async (ctx, { idnSub, slug }) => {
-    const { citizen } = await requireCitizen(ctx, idnSub)
+  args: { slug: v.string() },
+  handler: async (ctx, { slug }) => {
+    const { citizen } = await requireCitizen(ctx)
 
     const service = await ctx.db
       .query("services")

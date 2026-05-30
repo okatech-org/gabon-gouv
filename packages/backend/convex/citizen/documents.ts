@@ -8,9 +8,9 @@ import { requireCitizen } from "./auth"
  */
 
 export const listMyDocuments = query({
-  args: { idnSub: v.string() },
-  handler: async (ctx, { idnSub }) => {
-    const { citizen } = await requireCitizen(ctx, idnSub)
+  args: {},
+  handler: async (ctx) => {
+    const { citizen } = await requireCitizen(ctx)
     const docs = await ctx.db
       .query("documents")
       .withIndex("by_citizen", (q) => q.eq("citizenId", citizen._id))
@@ -60,9 +60,9 @@ export const listMyDocuments = query({
 })
 
 export const getMyDocument = query({
-  args: { idnSub: v.string(), actNumber: v.string() },
-  handler: async (ctx, { idnSub, actNumber }) => {
-    const { citizen } = await requireCitizen(ctx, idnSub)
+  args: { actNumber: v.string() },
+  handler: async (ctx, { actNumber }) => {
+    const { citizen } = await requireCitizen(ctx)
 
     const doc = await ctx.db
       .query("documents")

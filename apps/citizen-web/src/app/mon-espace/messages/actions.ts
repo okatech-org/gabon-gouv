@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { api } from "@workspace/backend/generated"
-import { convex } from "@/lib/convex"
+import { getCitizenConvex } from "@/lib/convex"
 import { requireCurrentSession } from "@/lib/current-citizen"
 
 export interface ActionResult {
@@ -26,9 +26,9 @@ export async function markNotificationReadAction(
   notificationId: string,
 ): Promise<ActionResult> {
   const session = await requireCurrentSession()
+  const convex = await getCitizenConvex(session)
   try {
     await convex.mutation(api.citizen.messages.markNotificationRead, {
-      idnSub: session.idnSub,
       notificationId: notificationId as never,
     })
     revalidatePath("/mon-espace/messages")
@@ -43,9 +43,9 @@ export async function markAgentMessageReadAction(
   messageId: string,
 ): Promise<ActionResult> {
   const session = await requireCurrentSession()
+  const convex = await getCitizenConvex(session)
   try {
     await convex.mutation(api.citizen.messages.markAgentMessageRead, {
-      idnSub: session.idnSub,
       messageId: messageId as never,
     })
     revalidatePath("/mon-espace/messages")

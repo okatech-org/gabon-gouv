@@ -45,9 +45,9 @@ const CITIZEN_ALLOWED_KINDS: readonly CorrespondenceKind[] = [
    ============================================================ */
 
 export const citizenListInbox = query({
-  args: { idnSub: v.string() },
-  handler: async (ctx, { idnSub }) => {
-    const { citizen } = await requireCitizen(ctx, idnSub)
+  args: {},
+  handler: async (ctx) => {
+    const { citizen } = await requireCitizen(ctx)
     // Reçus : corres dont je suis recipient citizen
     const recipientRows = await ctx.db
       .query("correspondenceRecipients")
@@ -81,9 +81,9 @@ export const citizenListInbox = query({
 })
 
 export const citizenGetThread = query({
-  args: { idnSub: v.string(), ref: v.string() },
-  handler: async (ctx, { idnSub, ref }) => {
-    const { citizen } = await requireCitizen(ctx, idnSub)
+  args: { ref: v.string() },
+  handler: async (ctx, { ref }) => {
+    const { citizen } = await requireCitizen(ctx)
     const corres = await ctx.db
       .query("correspondences")
       .withIndex("by_ref", (q) => q.eq("ref", ref))
@@ -101,9 +101,9 @@ export const citizenGetThread = query({
 })
 
 export const citizenListOrganisms = query({
-  args: { idnSub: v.string() },
-  handler: async (ctx, { idnSub }) => {
-    await requireCitizen(ctx, idnSub)
+  args: {},
+  handler: async (ctx) => {
+    await requireCitizen(ctx)
     const orgs = await ctx.db.query("organisms").collect()
     return orgs
       .filter((o) => o.status === "active")
@@ -118,9 +118,9 @@ export const citizenListOrganisms = query({
 })
 
 export const citizenGetInboxCounts = query({
-  args: { idnSub: v.string() },
-  handler: async (ctx, { idnSub }) => {
-    const { citizen } = await requireCitizen(ctx, idnSub)
+  args: {},
+  handler: async (ctx) => {
+    const { citizen } = await requireCitizen(ctx)
     const recipientRows = await ctx.db
       .query("correspondenceRecipients")
       .withIndex("by_citizen", (q) => q.eq("recipientCitizenId", citizen._id))
@@ -146,7 +146,6 @@ export const citizenGetInboxCounts = query({
 
 export const citizenCreateCorrespondence = mutation({
   args: {
-    idnSub: v.string(),
     toOrganismId: v.id("organisms"),
     kind: correspondenceKindValidator,
     subject: v.string(),
@@ -154,7 +153,7 @@ export const citizenCreateCorrespondence = mutation({
     linkedRequestIds: v.optional(v.array(v.id("requests"))),
   },
   handler: async (ctx, args) => {
-    const { citizen, actor } = await requireCitizen(ctx, args.idnSub)
+    const { citizen, actor } = await requireCitizen(ctx)
     assertCan(actor, "correspondence.citizen.send")
 
     if (!CITIZEN_ALLOWED_KINDS.includes(args.kind)) {
@@ -215,12 +214,11 @@ export const citizenCreateCorrespondence = mutation({
 
 export const citizenReply = mutation({
   args: {
-    idnSub: v.string(),
     correspondenceId: v.id("correspondences"),
     body: v.string(),
   },
   handler: async (ctx, args) => {
-    const { citizen, actor } = await requireCitizen(ctx, args.idnSub)
+    const { citizen, actor } = await requireCitizen(ctx)
     assertCan(actor, "correspondence.citizen.reply")
     if (!args.body.trim()) throw new Error("Le corps est vide.")
 
@@ -283,12 +281,11 @@ export const citizenReply = mutation({
 
 export const citizenAcknowledge = mutation({
   args: {
-    idnSub: v.string(),
     correspondenceId: v.id("correspondences"),
     note: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const { citizen, actor } = await requireCitizen(ctx, args.idnSub)
+    const { citizen, actor } = await requireCitizen(ctx)
     assertCan(actor, "correspondence.citizen.acknowledge")
     const corres = await ctx.db.get(args.correspondenceId)
     if (!corres) throw new Error("Correspondance introuvable.")

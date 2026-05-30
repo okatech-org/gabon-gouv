@@ -1,4 +1,3 @@
-import { v } from "convex/values"
 import { query } from "../_generated/server"
 import { requireCitizen } from "./auth"
 
@@ -9,9 +8,9 @@ import { requireCitizen } from "./auth"
  * d'authentification fédérée).
  */
 export const getMyIdentity = query({
-  args: { idnSub: v.string() },
-  handler: async (ctx, { idnSub }) => {
-    const { citizen } = await requireCitizen(ctx, idnSub)
+  args: {},
+  handler: async (ctx) => {
+    const { citizen } = await requireCitizen(ctx)
     const isDemoNip = citizen.idnSub?.startsWith("nip:") ?? false
     const isSandboxSeed = citizen.idnSub?.startsWith("idn-sandbox-") ?? false
 

@@ -24,14 +24,13 @@ import { requireCitizen } from "./auth"
    ============================================================ */
 export const saveDraft = mutation({
   args: {
-    idnSub: v.string(),
     serviceId: v.id("services"),
     serviceVariantId: v.optional(v.id("serviceVariants")),
     currentStep: v.number(),
     payload: v.any(),
   },
   handler: async (ctx, args) => {
-    const { citizen } = await requireCitizen(ctx, args.idnSub)
+    const { citizen } = await requireCitizen(ctx)
 
     // Vérifie que le service existe et est publié (pas de brouillon sur
     // service archivé/draft côté agent)
@@ -81,9 +80,9 @@ export const saveDraft = mutation({
    getMyDraft — par service (pour reprise)
    ============================================================ */
 export const getMyDraft = query({
-  args: { idnSub: v.string(), serviceSlug: v.string() },
-  handler: async (ctx, { idnSub, serviceSlug }) => {
-    const { citizen } = await requireCitizen(ctx, idnSub)
+  args: { serviceSlug: v.string() },
+  handler: async (ctx, { serviceSlug }) => {
+    const { citizen } = await requireCitizen(ctx)
     const service = await ctx.db
       .query("services")
       .withIndex("by_slug", (q) => q.eq("slug", serviceSlug))
@@ -111,9 +110,9 @@ export const getMyDraft = query({
    listMyDrafts — page « Mes brouillons » (vue d'ensemble)
    ============================================================ */
 export const listMyDrafts = query({
-  args: { idnSub: v.string() },
-  handler: async (ctx, { idnSub }) => {
-    const { citizen } = await requireCitizen(ctx, idnSub)
+  args: {},
+  handler: async (ctx) => {
+    const { citizen } = await requireCitizen(ctx)
     const drafts = await ctx.db
       .query("requestDrafts")
       .withIndex("by_citizen", (q) => q.eq("citizenId", citizen._id))
@@ -148,9 +147,9 @@ export const listMyDrafts = query({
    discardDraft — explicite (« annuler la reprise »)
    ============================================================ */
 export const discardDraft = mutation({
-  args: { idnSub: v.string(), draftId: v.id("requestDrafts") },
-  handler: async (ctx, { idnSub, draftId }) => {
-    const { citizen } = await requireCitizen(ctx, idnSub)
+  args: { draftId: v.id("requestDrafts") },
+  handler: async (ctx, { draftId }) => {
+    const { citizen } = await requireCitizen(ctx)
     const draft = await ctx.db.get(draftId)
     if (!draft) return // idempotent
     if (draft.citizenId !== citizen._id) {

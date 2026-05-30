@@ -16,14 +16,13 @@ import {
   type Tone,
 } from "@workspace/ui"
 import { api } from "@workspace/backend/generated"
-import { convex } from "@/lib/convex"
+import { getCitizenConvex } from "@/lib/convex"
 import { requireCurrentSession } from "@/lib/current-citizen"
 
 export default async function CitizenDashboardPage() {
   const session = await requireCurrentSession()
-  const data = await convex.query(api.citizen.dashboard.getDashboard, {
-    idnSub: session.idnSub,
-  })
+  const convex = await getCitizenConvex(session)
+  const data = await convex.query(api.citizen.dashboard.getDashboard, {})
   const { profile, stats, requests, recommendations, messages } = data
   const unreadCount = messages.filter((m) => m.unread).length
   const firstName = profile.name.split(" ")[0]

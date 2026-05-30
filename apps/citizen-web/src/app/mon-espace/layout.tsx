@@ -2,7 +2,7 @@ import type { ReactNode } from "react"
 import { redirect } from "next/navigation"
 import { AppHeader, Sidebar } from "@workspace/ui"
 import { api } from "@workspace/backend/generated"
-import { convex } from "@/lib/convex"
+import { getCitizenConvex } from "@/lib/convex"
 import { requireCurrentSession } from "@/lib/current-citizen"
 import { buildCitizenNav } from "@/lib/citizen-nav"
 
@@ -22,6 +22,7 @@ export default async function CitizenSpaceLayout({
   children: ReactNode
 }) {
   const session = await requireCurrentSession()
+  const convex = await getCitizenConvex(session)
   // Récupère le profil citoyen Convex pour avoir le nom officiel (état civil).
   // Si le sub IDN n'est lié à aucun compte, on renvoie sur /login avec un
   // bandeau "compte non provisionné".
@@ -34,13 +35,9 @@ export default async function CitizenSpaceLayout({
   }
   try {
     const [dashboard, corresCounts] = await Promise.all([
-      convex.query(api.citizen.dashboard.getDashboard, {
-        idnSub: session.idnSub,
-      }),
+      convex.query(api.citizen.dashboard.getDashboard, {}),
       convex
-        .query(api.citizen.correspondence.citizenGetInboxCounts, {
-          idnSub: session.idnSub,
-        })
+        .query(api.citizen.correspondence.citizenGetInboxCounts, {})
         .catch(() => ({ unread: 0, withoutAck: 0 })),
     ])
     displayName = dashboard.profile.name

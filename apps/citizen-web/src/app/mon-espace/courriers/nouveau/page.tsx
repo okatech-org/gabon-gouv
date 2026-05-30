@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { PageHeader } from "@workspace/ui"
 import { api } from "@workspace/backend/generated"
-import { convex } from "@/lib/convex"
+import { getCitizenConvex } from "@/lib/convex"
 import { requireCurrentSession } from "@/lib/current-citizen"
 import { CitizenNewCorrespondenceForm } from "./form"
 
@@ -16,9 +16,10 @@ import { CitizenNewCorrespondenceForm } from "./form"
  */
 export default async function CitizenNewCorrespondencePage() {
   const session = await requireCurrentSession()
+  const convex = await getCitizenConvex(session)
   const organisms = (await convex.query(
     api.citizen.correspondence.citizenListOrganisms,
-    { idnSub: session.idnSub },
+    {},
   )) as Array<{ id: string; name: string; shortName: string; category: string }>
 
   return (

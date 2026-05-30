@@ -14,7 +14,7 @@ import {
   type Tone,
 } from "@workspace/ui"
 import { api } from "@workspace/backend/generated"
-import { convex } from "@/lib/convex"
+import { getCitizenConvex } from "@/lib/convex"
 import { requireCurrentSession } from "@/lib/current-citizen"
 
 const FILTERS = [
@@ -40,9 +40,10 @@ export default async function CitizenRequestsListPage({
     "all") as FilterId
 
   const session = await requireCurrentSession()
+  const convex = await getCitizenConvex(session)
   const { requests, stats } = await convex.query(
     api.citizen.requests.listMyRequests,
-    { idnSub: session.idnSub },
+    {},
   )
 
   // Filtre côté serveur (rendu rapide, fonctionne sans JS)

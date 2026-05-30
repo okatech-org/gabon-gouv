@@ -1329,16 +1329,14 @@ describe("counts + search + escalations", () => {
 describe("citoyen", () => {
   test("citizenCreateCorrespondence happy path → corres sent + 1 message", async () => {
     const f = await buildFixture()
-    const res = await f.t.mutation(
-      api.citizen.correspondence.citizenCreateCorrespondence,
-      {
-        idnSub: f.marieSub,
+    const res = await f.t
+      .withIdentity({ subject: f.marieSub })
+      .mutation(api.citizen.correspondence.citizenCreateCorrespondence, {
         toOrganismId: f.orgA,
         kind: "instruction_request",
         subject: "Demande d'information",
         body: "Bonjour, …",
-      },
-    )
+      })
     expect(res.ref).toMatch(/^CR-\d{4}-\d{5}$/)
     const corres = await f.t.run((ctx) => ctx.db.get(res.correspondenceId))
     expect(corres?.status).toBe("sent")
@@ -1349,33 +1347,33 @@ describe("citoyen", () => {
   test("citizenCreateCorrespondence refuse kind interdit (decision_reject)", async () => {
     const f = await buildFixture()
     await expect(
-      f.t.mutation(api.citizen.correspondence.citizenCreateCorrespondence, {
-        idnSub: f.marieSub,
-        toOrganismId: f.orgA,
-        kind: "decision_reject",
-        subject: "s",
-        body: "b",
-      }),
+      f.t
+        .withIdentity({ subject: f.marieSub })
+        .mutation(api.citizen.correspondence.citizenCreateCorrespondence, {
+          toOrganismId: f.orgA,
+          kind: "decision_reject",
+          subject: "s",
+          body: "b",
+        }),
     ).rejects.toThrowError(/non autorisé/i)
   })
 
   test("citizenGetThread refusé pour un citoyen non-destinataire", async () => {
     const f = await buildFixture()
-    const res = await f.t.mutation(
-      api.citizen.correspondence.citizenCreateCorrespondence,
-      {
-        idnSub: f.marieSub,
+    const res = await f.t
+      .withIdentity({ subject: f.marieSub })
+      .mutation(api.citizen.correspondence.citizenCreateCorrespondence, {
         toOrganismId: f.orgA,
         kind: "instruction_request",
         subject: "s",
         body: "b",
-      },
-    )
+      })
     await expect(
-      f.t.query(api.citizen.correspondence.citizenGetThread, {
-        idnSub: f.jeanSub,
-        ref: res.ref,
-      }),
+      f.t
+        .withIdentity({ subject: f.jeanSub })
+        .query(api.citizen.correspondence.citizenGetThread, {
+          ref: res.ref,
+        }),
     ).rejects.toThrowError(/adressé/i)
   })
 
@@ -1402,20 +1400,20 @@ describe("citoyen", () => {
       token: f.cyrilToken,
       correspondenceId,
     })
-    await f.t.mutation(api.citizen.correspondence.citizenAcknowledge, {
-      idnSub: f.marieSub,
-      correspondenceId,
-    })
+    await f.t
+      .withIdentity({ subject: f.marieSub })
+      .mutation(api.citizen.correspondence.citizenAcknowledge, {
+        correspondenceId,
+      })
     const corres = await f.t.run((ctx) => ctx.db.get(correspondenceId))
     expect(corres?.status).toBe("acknowledged")
   })
 
   test("citizenListOrganisms renvoie les orgs active triés", async () => {
     const f = await buildFixture()
-    const orgs = await f.t.query(
-      api.citizen.correspondence.citizenListOrganisms,
-      { idnSub: f.marieSub },
-    )
+    const orgs = await f.t
+      .withIdentity({ subject: f.marieSub })
+      .query(api.citizen.correspondence.citizenListOrganisms, {})
     expect(orgs.length).toBeGreaterThanOrEqual(3)
     expect(orgs.map((o) => o.shortName)).toContain("DG EC")
   })

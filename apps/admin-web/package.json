@@ -7,14 +7,13 @@
     "dev": "next dev --port 4001",
     "build": "next build",
     "start": "next start -p 4001",
-    "lint": "echo 'no lint configured'",
+    "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
     "test:once": "vitest run"
   },
   "dependencies": {
     "@workspace/backend": "workspace:*",
-    "@workspace/mocks": "workspace:*",
     "@workspace/ui": "workspace:*",
     "convex": "^1.34.1",
     "next": "^15.5.0",

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import { api } from "@workspace/backend/generated"
-import { convex } from "@/lib/convex"
+import { getCitizenConvex } from "@/lib/convex"
 import { requireCurrentSession } from "@/lib/current-citizen"
 import { DepositWizard } from "./deposit-wizard"
 
@@ -14,15 +14,14 @@ export default async function CitizenDepositPage({ searchParams }: PageProps) {
   const sp = await searchParams
   const slug = sp.service ?? DEFAULT_SERVICE
   const session = await requireCurrentSession()
+  const convex = await getCitizenConvex(session)
 
   // Charge tout en parallèle : data wizard + brouillon existant pour reprise
   const [wizard, draft] = await Promise.all([
     convex.query(api.citizen.catalog.getServiceForWizard, {
-      idnSub: session.idnSub,
       slug,
     }),
     convex.query(api.citizen.drafts.getMyDraft, {
-      idnSub: session.idnSub,
       serviceSlug: slug,
     }),
   ])

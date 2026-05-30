@@ -6,7 +6,7 @@
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
-    "lint": "turbo lint",
+    "lint": "eslint .",
     "format": "turbo format",
     "typecheck": "turbo typecheck",
     "test": "turbo test",
@@ -18,11 +18,14 @@
     "dev:convex": "bunx convex dev --cwd packages/backend"
   },
   "devDependencies": {
+    "@eslint/js": "^9",
     "@playwright/test": "^1.49.0",
+    "eslint": "^9",
     "prettier": "^3.8.1",
     "prettier-plugin-tailwindcss": "^0.7.2",
     "turbo": "^2.8.17",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "typescript-eslint": "^8"
   },
   "engines": {
     "node": ">=20"

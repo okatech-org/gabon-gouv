@@ -382,7 +382,6 @@ function PieceViewerDialog({
               style={{ width: "100%", height: "100%", border: 0 }}
             />
           ) : isImage ? (
-            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={data.url}
               alt={`Aperçu de ${piece.label}`}

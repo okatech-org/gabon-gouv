@@ -4,12 +4,12 @@
  * Server actions de la page /mon-espace/courriers (Bloc 5 — citoyen).
  *
  * Façade vers les mutations Convex citoyennes (`citizen.correspondence.*`).
- * Vérifie l'idnSub depuis la session, capture les erreurs.
+ * L'identité est portée par le JWT du client authentifié, capture les erreurs.
  */
 
 import { revalidatePath } from "next/cache"
 import { api } from "@workspace/backend/generated"
-import { convex } from "@/lib/convex"
+import { getCitizenConvex } from "@/lib/convex"
 import { requireCurrentSession } from "@/lib/current-citizen"
 
 export interface ActionResult {
@@ -44,11 +44,11 @@ export async function citizenSendAction(args: {
   body: string
 }): Promise<ActionResult> {
   const session = await requireCurrentSession()
+  const convex = await getCitizenConvex(session)
   try {
     const res = await convex.mutation(
       api.citizen.correspondence.citizenCreateCorrespondence,
       {
-        idnSub: session.idnSub,
         toOrganismId: asId(args.toOrganismId),
         kind: args.kind as never,
         subject: args.subject,
@@ -72,9 +72,9 @@ export async function citizenReplyAction(
 ): Promise<ActionResult> {
   if (!body.trim()) return { ok: false, message: "Le message est vide." }
   const session = await requireCurrentSession()
+  const convex = await getCitizenConvex(session)
   try {
     await convex.mutation(api.citizen.correspondence.citizenReply, {
-      idnSub: session.idnSub,
       correspondenceId: asId(correspondenceId),
       body,
     })
@@ -90,9 +90,9 @@ export async function citizenAcknowledgeAction(
   note?: string,
 ): Promise<ActionResult> {
   const session = await requireCurrentSession()
+  const convex = await getCitizenConvex(session)
   try {
     await convex.mutation(api.citizen.correspondence.citizenAcknowledge, {
-      idnSub: session.idnSub,
       correspondenceId: asId(correspondenceId),
       note: note?.trim() || undefined,
     })

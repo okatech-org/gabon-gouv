@@ -308,7 +308,6 @@ export function ActeOfficial(input: ActePdfInputWithQR): React.ReactElement {
         <View style={styles.signatureRow}>
           {input.qrDataUrl ? (
             <View style={styles.qrBlock}>
-              {/* eslint-disable-next-line jsx-a11y/alt-text */}
               <Image src={input.qrDataUrl} style={styles.qrImage} />
               <Text style={styles.qrLabel}>
                 Scannez pour vérifier{"\n"}cet acte en ligne

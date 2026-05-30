@@ -9,7 +9,7 @@ import {
   SectionHeading,
 } from "@workspace/ui"
 import { api } from "@workspace/backend/generated"
-import { convex } from "@/lib/convex"
+import { getCitizenConvex } from "@/lib/convex"
 import { requireCurrentSession } from "@/lib/current-citizen"
 import { CitizenThreadActions } from "./thread-actions"
 
@@ -27,11 +27,12 @@ export default async function CitizenCourrierDetailPage({
   params: Promise<{ ref: string }>
 }) {
   const session = await requireCurrentSession()
+  const convex = await getCitizenConvex(session)
   const { ref } = await params
 
   const thread = await convex.query(
     api.citizen.correspondence.citizenGetThread,
-    { idnSub: session.idnSub, ref },
+    { ref },
   )
   if (!thread) notFound()
 

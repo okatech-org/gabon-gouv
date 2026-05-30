@@ -10,7 +10,7 @@ import {
 } from "@workspace/ui"
 import { notFound } from "next/navigation"
 import { api } from "@workspace/backend/generated"
-import { convex } from "@/lib/convex"
+import { getCitizenConvex } from "@/lib/convex"
 import { requireCurrentSession } from "@/lib/current-citizen"
 
 export default async function CitizenDocumentPage({
@@ -20,8 +20,8 @@ export default async function CitizenDocumentPage({
 }) {
   const { ref } = await params
   const session = await requireCurrentSession()
+  const convex = await getCitizenConvex(session)
   const doc = await convex.query(api.citizen.documents.getMyDocument, {
-    idnSub: session.idnSub,
     actNumber: ref,
   })
   if (!doc) notFound()

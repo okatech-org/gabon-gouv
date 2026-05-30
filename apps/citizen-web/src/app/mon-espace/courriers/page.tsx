@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { Badge, Button, Card, Icon, PageHeader } from "@workspace/ui"
 import { api } from "@workspace/backend/generated"
-import { convex } from "@/lib/convex"
+import { getCitizenConvex } from "@/lib/convex"
 import { requireCurrentSession } from "@/lib/current-citizen"
 
 /**
@@ -29,9 +29,10 @@ interface ListItem {
 
 export default async function CitizenCourriersPage() {
   const session = await requireCurrentSession()
+  const convex = await getCitizenConvex(session)
   const res = (await convex.query(
     api.citizen.correspondence.citizenListInbox,
-    { idnSub: session.idnSub },
+    {},
   )) as { inbox: ListItem[]; sent: ListItem[] }
 
   return (

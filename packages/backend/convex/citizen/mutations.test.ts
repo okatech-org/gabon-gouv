@@ -128,17 +128,24 @@ describe("requireCitizen", () => {
   test("refuse un sub IDN inconnu (compte non provisionné)", async () => {
     const f = await buildFixture()
     await expect(
-      f.t.query(api.citizen.dashboard.getDashboard, {
-        idnSub: "idn-test-inconnu",
-      }),
+      f.t
+        .withIdentity({ subject: "idn-test-inconnu" })
+        .query(api.citizen.dashboard.getDashboard, {}),
     ).rejects.toThrowError(/non provisionné/i)
+  })
+
+  test("refuse une requête non authentifiée", async () => {
+    const f = await buildFixture()
+    await expect(
+      f.t.query(api.citizen.dashboard.getDashboard, {}),
+    ).rejects.toThrowError(/authentification/i)
   })
 
   test("autorise un sub IDN connu", async () => {
     const f = await buildFixture()
-    const dash = await f.t.query(api.citizen.dashboard.getDashboard, {
-      idnSub: f.marieSub,
-    })
+    const dash = await f.t
+      .withIdentity({ subject: f.marieSub })
+      .query(api.citizen.dashboard.getDashboard, {})
     expect(dash.profile.name).toContain("Marie")
   })
 })
@@ -150,14 +157,15 @@ describe("requireCitizen", () => {
 describe("submitRequest", () => {
   test("happy path : crée une demande + 2 events (submission + seal)", async () => {
     const f = await buildFixture()
-    const res = await f.t.mutation(api.citizen.requests.submitRequest, {
-      idnSub: f.marieSub,
-      serviceSlug: f.serviceSlug,
-      variantKey: f.variantKey,
-      numberOfCopies: 2,
-      beneficiaryKind: "self",
-      consents: { honor: true, rgpd: true },
-    })
+    const res = await f.t
+      .withIdentity({ subject: f.marieSub })
+      .mutation(api.citizen.requests.submitRequest, {
+        serviceSlug: f.serviceSlug,
+        variantKey: f.variantKey,
+        numberOfCopies: 2,
+        beneficiaryKind: "self",
+        consents: { honor: true, rgpd: true },
+      })
     expect(res.ref).toMatch(/^GC-\d{4}-EC-\d{5}$/)
 
     const req = await f.t.run((ctx) => ctx.db.get(res.requestId))
@@ -177,33 +185,39 @@ describe("submitRequest", () => {
   test("refuse si consentement honor manquant", async () => {
     const f = await buildFixture()
     await expect(
-      f.t.mutation(api.citizen.requests.submitRequest, {
-        idnSub: f.marieSub,
-        serviceSlug: f.serviceSlug,
-        consents: { honor: false, rgpd: true },
-      }),
+      f.t.withIdentity({ subject: f.marieSub }).mutation(
+        api.citizen.requests.submitRequest,
+        {
+          serviceSlug: f.serviceSlug,
+          consents: { honor: false, rgpd: true },
+        },
+      ),
     ).rejects.toThrowError(/honneur/i)
   })
 
   test("refuse si service inconnu", async () => {
     const f = await buildFixture()
     await expect(
-      f.t.mutation(api.citizen.requests.submitRequest, {
-        idnSub: f.marieSub,
-        serviceSlug: "service-inexistant",
-        consents: { honor: true, rgpd: true },
-      }),
+      f.t.withIdentity({ subject: f.marieSub }).mutation(
+        api.citizen.requests.submitRequest,
+        {
+          serviceSlug: "service-inexistant",
+          consents: { honor: true, rgpd: true },
+        },
+      ),
     ).rejects.toThrowError(/introuvable/i)
   })
 
   test("refuse si compte non provisionné", async () => {
     const f = await buildFixture()
     await expect(
-      f.t.mutation(api.citizen.requests.submitRequest, {
-        idnSub: "idn-inexistant",
-        serviceSlug: f.serviceSlug,
-        consents: { honor: true, rgpd: true },
-      }),
+      f.t.withIdentity({ subject: "idn-inexistant" }).mutation(
+        api.citizen.requests.submitRequest,
+        {
+          serviceSlug: f.serviceSlug,
+          consents: { honor: true, rgpd: true },
+        },
+      ),
     ).rejects.toThrowError(/non provisionné/i)
   })
 })
@@ -215,11 +229,12 @@ describe("submitRequest", () => {
 describe("cancelMyRequest", () => {
   test("happy path : statut → cancelled + event", async () => {
     const f = await buildFixture()
-    await f.t.mutation(api.citizen.requests.cancelMyRequest, {
-      idnSub: f.marieSub,
-      ref: f.existingRef,
-      reason: "Je m'en occupe directement en mairie.",
-    })
+    await f.t
+      .withIdentity({ subject: f.marieSub })
+      .mutation(api.citizen.requests.cancelMyRequest, {
+        ref: f.existingRef,
+        reason: "Je m'en occupe directement en mairie.",
+      })
     const req = await f.t.run((ctx) => ctx.db.get(f.existingRequestId))
     expect(req?.status).toBe("cancelled")
     const events = await f.t.run((ctx) =>
@@ -236,10 +251,10 @@ describe("cancelMyRequest", () => {
   test("refuse d'annuler la demande d'un autre citoyen", async () => {
     const f = await buildFixture()
     await expect(
-      f.t.mutation(api.citizen.requests.cancelMyRequest, {
-        idnSub: f.jpSub,
-        ref: f.existingRef,
-      }),
+      f.t.withIdentity({ subject: f.jpSub }).mutation(
+        api.citizen.requests.cancelMyRequest,
+        { ref: f.existingRef },
+      ),
     ).rejects.toThrowError(/appartient pas/i)
   })
 
@@ -249,10 +264,10 @@ describe("cancelMyRequest", () => {
       ctx.db.patch(f.existingRequestId, { status: "issued" }),
     )
     await expect(
-      f.t.mutation(api.citizen.requests.cancelMyRequest, {
-        idnSub: f.marieSub,
-        ref: f.existingRef,
-      }),
+      f.t.withIdentity({ subject: f.marieSub }).mutation(
+        api.citizen.requests.cancelMyRequest,
+        { ref: f.existingRef },
+      ),
     ).rejects.toThrowError(/ne peut plus/i)
   })
 })
@@ -264,11 +279,12 @@ describe("cancelMyRequest", () => {
 describe("sendMessageToOrganism", () => {
   test("happy path : insère un message + event", async () => {
     const f = await buildFixture()
-    await f.t.mutation(api.citizen.requests.sendMessageToOrganism, {
-      idnSub: f.marieSub,
-      ref: f.existingRef,
-      body: "Bonjour, où en est ma demande ?",
-    })
+    await f.t
+      .withIdentity({ subject: f.marieSub })
+      .mutation(api.citizen.requests.sendMessageToOrganism, {
+        ref: f.existingRef,
+        body: "Bonjour, où en est ma demande ?",
+      })
     const msgs = await f.t.run((ctx) =>
       ctx.db
         .query("requestMessages")
@@ -285,22 +301,20 @@ describe("sendMessageToOrganism", () => {
   test("refuse un message vide", async () => {
     const f = await buildFixture()
     await expect(
-      f.t.mutation(api.citizen.requests.sendMessageToOrganism, {
-        idnSub: f.marieSub,
-        ref: f.existingRef,
-        body: "   ",
-      }),
+      f.t.withIdentity({ subject: f.marieSub }).mutation(
+        api.citizen.requests.sendMessageToOrganism,
+        { ref: f.existingRef, body: "   " },
+      ),
     ).rejects.toThrowError(/vide/i)
   })
 
   test("refuse si demande appartient à un autre", async () => {
     const f = await buildFixture()
     await expect(
-      f.t.mutation(api.citizen.requests.sendMessageToOrganism, {
-        idnSub: f.jpSub,
-        ref: f.existingRef,
-        body: "Hello",
-      }),
+      f.t.withIdentity({ subject: f.jpSub }).mutation(
+        api.citizen.requests.sendMessageToOrganism,
+        { ref: f.existingRef, body: "Hello" },
+      ),
     ).rejects.toThrowError(/appartient pas/i)
   })
 })

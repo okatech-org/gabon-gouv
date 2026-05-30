@@ -13,9 +13,9 @@ import { requireCitizen } from "./auth"
  * vers la demande / document source quand pertinent.
  */
 export const listMyMessages = query({
-  args: { idnSub: v.string() },
-  handler: async (ctx, { idnSub }) => {
-    const { citizen } = await requireCitizen(ctx, idnSub)
+  args: {},
+  handler: async (ctx) => {
+    const { citizen } = await requireCitizen(ctx)
 
     // 1) Notifications system / admin
     const notifs = (await ctx.db.query("notifications").collect()).filter(
@@ -130,9 +130,9 @@ export const listMyMessages = query({
 
 /** Marque une notification comme lue. */
 export const markNotificationRead = mutation({
-  args: { idnSub: v.string(), notificationId: v.id("notifications") },
-  handler: async (ctx, { idnSub, notificationId }) => {
-    const { citizen } = await requireCitizen(ctx, idnSub)
+  args: { notificationId: v.id("notifications") },
+  handler: async (ctx, { notificationId }) => {
+    const { citizen } = await requireCitizen(ctx)
     const n = await ctx.db.get(notificationId)
     if (!n) throw new Error("Notification introuvable.")
     if (n.recipientKind !== "citizen" || n.recipientId !== citizen._id) {
@@ -146,9 +146,9 @@ export const markNotificationRead = mutation({
 
 /** Marque un message d'agent comme lu (côté citoyen). */
 export const markAgentMessageRead = mutation({
-  args: { idnSub: v.string(), messageId: v.id("requestMessages") },
-  handler: async (ctx, { idnSub, messageId }) => {
-    const { citizen } = await requireCitizen(ctx, idnSub)
+  args: { messageId: v.id("requestMessages") },
+  handler: async (ctx, { messageId }) => {
+    const { citizen } = await requireCitizen(ctx)
     const m = await ctx.db.get(messageId)
     if (!m) throw new Error("Message introuvable.")
     const req = await ctx.db.get(m.requestId)
